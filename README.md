@@ -1,3 +1,6 @@
+
+<img width="1506" height="884" alt="tran" src="https://github.com/user-attachments/assets/cd25e3af-f7a9-4adf-b63a-d751b6313f9f" />
+
 # Main Features
 
 - Menus for entering parameters (manually or from a text file), materials, geometries, sources, and monitors 
