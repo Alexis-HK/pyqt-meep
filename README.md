@@ -8,9 +8,9 @@
 - Simulations can either be run on the application, or a Python script which is generated according to GUI actions
 - Results are viewed in an output window, and can be exported
 
-screenshot goes here
+
 # How to run
-For now, the application can be ran by first creating a Conda environment (the most convenient way to install Meep) with the relevant packages:
+For now, the application can be run by first creating a Conda environment (the most convenient way to install Meep) with the relevant packages:
 ```
 conda create --name meep-gui --override-channels -c conda-forge python=3.11
 conda activate meep-gui
@@ -21,10 +21,10 @@ conda install --override-channels -c conda-forge \
 Then, in the folder, to run the application:
 
 ```
-python3 app.y
+python3 app.py
 ```
 In the future, MacOS and Linux executables could be created.
-# WIP
+# Roadmap
 This arose from a research tool, and the application is still in its early phases. As such, there are a number of planned features:
 - More material types rather than simple dielectrics, such as common dispersion models, chi2/3 nonlinearities, and conductivity
 - GDS import and more geometry primitives (provided by builtin Meep functions)
