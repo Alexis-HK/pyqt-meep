@@ -1,0 +1,181 @@
+parameters:
+- name: source_pad
+  expr: '1'
+- name: wg_width
+  expr: '0.5'
+- name: ring_outer
+  expr: '5'
+- name: ring_width
+  expr: '0.5'
+- name: dpml
+  expr: '1'
+- name: gap
+  expr: '0.175'
+- name: x_pad
+  expr: '2'
+- name: y_pad_top
+  expr: '2'
+- name: y_pad_bottom
+  expr: '2'
+- name: cell_size_x
+  expr: 2*(ring_outer + x_pad + dpml + source_pad)
+- name: ring_inner
+  expr: ring_outer-ring_width
+- name: cell_size_y
+  expr: 2*ring_outer+gap+wg_width+y_pad_top+y_pad_bottom+2*dpml
+- name: fcen
+  expr: '0.65'
+- name: fwidth
+  expr: '0.1'
+- name: nfreq
+  expr: '400'
+- name: waveguide_y
+  expr: -(ring_outer + gap + 0.5 * wg_width)
+- name: resolution
+  expr: '32'
+materials:
+- name: silicon
+  index_expr: '1.8'
+- name: air
+  index_expr: '1'
+geometries:
+- name: wg_sc
+  kind: block
+  material: silicon
+  props:
+    center_x: '0'
+    center_y: waveguide_y
+    size_x: '90'
+    size_y: wg_width
+- name: ring1
+  kind: circle
+  material: silicon
+  props:
+    center_x: '0'
+    center_y: '0'
+    radius: ring_outer
+- name: ring2
+  kind: circle
+  material: air
+  props:
+    center_x: '0'
+    center_y: '0'
+    radius: ring_inner
+sources:
+- name: src_sc
+  kind: gaussian
+  component: Hz
+  props:
+    center_x: -0.5 * cell_size_x + dpml + source_pad
+    center_y: waveguide_y
+    size_x: '0'
+    size_y: '0'
+    fcen: fcen
+    df: fwidth
+domain:
+  cell_x: cell_size_x
+  cell_y: cell_size_y
+  resolution: resolution
+  pml_width: dpml
+  pml_mode: both
+flux_monitors:
+- name: moni_sc
+  center_x: 0.5 * cell_size_x - dpml - source_pad
+  center_y: waveguide_y
+  size_x: '0'
+  size_y: wg_width*4
+  fcen: fcen
+  df: fwidth
+  nfreq: nfreq
+analysis:
+  kind: transmission_spectrum
+  field_animation:
+    component: Hz
+    duration: '800'
+    interval: '1'
+    fps: '20'
+    output_dir: ''
+    output_name: animation.mp4
+  harminv:
+    component: Ez
+    point_x: '0'
+    point_y: '0'
+    fcen: '0.15'
+    df: '0.1'
+    until_after_sources: '200'
+    animation_interval: '1'
+    animation_fps: '20'
+    output_dir: ''
+    output_name: harminv_animation.mp4
+    harminv_log_path: harminv.txt
+  transmission_spectrum:
+    incident_monitor: moni_ref
+    transmission_monitor: moni_sc
+    reflection_monitor: ''
+    reference_reflection_monitor: ''
+    until_after_sources: '500'
+    animate_reference: true
+    animate_scattering: true
+    animation_component: Hz
+    animation_interval: '1'
+    animation_fps: '20'
+    output_dir: ''
+    output_prefix: transmission
+    preview_domain: scattering
+    reference_state:
+      domain:
+        cell_x: cell_size_x
+        cell_y: cell_size_y
+        resolution: resolution
+        pml_width: dpml
+        pml_mode: both
+      geometries:
+      - name: wg_ref
+        kind: block
+        material: silicon
+        props:
+          center_x: '0'
+          center_y: waveguide_y
+          size_x: '90'
+          size_y: wg_width
+      sources:
+      - name: src_ref
+        kind: gaussian
+        component: Hz
+        props:
+          center_x: -0.5 * cell_size_x + dpml + source_pad
+          center_y: waveguide_y
+          size_x: '0'
+          size_y: '0'
+          fcen: fcen
+          df: fwidth
+      flux_monitors:
+      - name: moni_ref
+        center_x: 0.5 * cell_size_x - dpml - source_pad
+        center_y: waveguide_y
+        size_x: '0'
+        size_y: wg_width*4
+        fcen: fcen
+        df: fwidth
+        nfreq: nfreq
+  mpb_modesolver:
+    lattice_x: '1'
+    lattice_y: '1'
+    basis1_x: '1'
+    basis1_y: '0'
+    basis2_x: '0'
+    basis2_y: '1'
+    num_bands: '1'
+    resolution: '16'
+    unit_cells: '1'
+    kpoint_interp: '10'
+    max_mode_images: '64'
+    run_tm: true
+    run_te: false
+    kpoints: []
+    field_kpoints: []
+sweep:
+  enabled: false
+  max_points: '64'
+  allow_large: false
+  params: []

@@ -1,0 +1,147 @@
+parameters:
+- name: eps
+  expr: sqrt(13)
+- name: w
+  expr: '1.2'
+- name: r
+  expr: '0.36'
+- name: sy
+  expr: '12'
+- name: dpml
+  expr: '1'
+- name: resolution
+  expr: '20'
+- name: fcen
+  expr: '0.25'
+- name: df
+  expr: '1.5'
+materials:
+- name: mat
+  index_expr: eps
+- name: air
+  index_expr: '1'
+geometries:
+- name: b
+  kind: block
+  material: mat
+  props:
+    center_x: '0'
+    center_y: '0'
+    size_x: '1'
+    size_y: w
+- name: c
+  kind: circle
+  material: air
+  props:
+    center_x: '0'
+    center_y: '0'
+    radius: r
+sources:
+- name: s
+  kind: gaussian
+  component: Hz
+  props:
+    center_x: '0.1234'
+    center_y: '0'
+    size_x: '0'
+    size_y: '0'
+    fcen: fcen
+    df: df
+domain:
+  cell_x: '1'
+  cell_y: sy
+  resolution: resolution
+  pml_width: dpml
+  pml_mode: y
+  symmetry_enabled: true
+  symmetries:
+  - name: sym
+    kind: mirror
+    direction: y
+    phase: '-1'
+flux_monitors: []
+analysis:
+  kind: meep_k_points
+  field_animation:
+    component: Ez
+    duration: '200'
+    interval: '1'
+    fps: '20'
+    output_dir: ''
+    output_name: animation.mp4
+  harminv:
+    component: Ez
+    point_x: '0'
+    point_y: '0'
+    fcen: '0.15'
+    df: '0.1'
+    until_after_sources: '200'
+    animation_interval: '1'
+    animation_fps: '20'
+    output_dir: ''
+    output_name: harminv_animation.mp4
+    harminv_log_path: harminv.txt
+  transmission_spectrum:
+    incident_monitor: ''
+    transmission_monitor: ''
+    reflection_monitor: ''
+    reference_reflection_monitor: ''
+    until_after_sources: '200'
+    animate_reference: false
+    animate_scattering: false
+    animation_component: Ez
+    animation_interval: '1'
+    animation_fps: '20'
+    output_dir: ''
+    output_prefix: transmission
+    preview_domain: scattering
+    reference_state:
+      domain:
+        cell_x: '10'
+        cell_y: '10'
+        resolution: '20'
+        pml_width: '1'
+        pml_mode: both
+        symmetry_enabled: false
+        symmetries: []
+      geometries: []
+      sources: []
+      flux_monitors: []
+  frequency_domain_solver:
+    component: Ez
+    tolerance: 1e-8
+    max_iters: '10000'
+    bicgstab_l: '10'
+    output_dir: ''
+    output_name: frequency_domain_field.png
+  meep_k_points:
+    kpoint_interp: '19'
+    run_time: '300'
+    kpoints:
+    - kx: '0'
+      ky: '0'
+    - kx: '0.5'
+      ky: '0'
+    output_dir: ''
+    output_prefix: meep_k_points
+  mpb_modesolver:
+    lattice_x: '1'
+    lattice_y: '1'
+    basis1_x: '1'
+    basis1_y: '0'
+    basis2_x: '0'
+    basis2_y: '1'
+    num_bands: '1'
+    resolution: '16'
+    unit_cells: '1'
+    kpoint_interp: '10'
+    max_mode_images: '64'
+    run_tm: true
+    run_te: false
+    kpoints: []
+    field_kpoints: []
+sweep:
+  enabled: false
+  max_points: '64'
+  allow_large: false
+  params: []

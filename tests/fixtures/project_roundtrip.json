@@ -1,0 +1,165 @@
+{
+  "parameters": [
+    {
+      "name": "a",
+      "expr": "1.0"
+    }
+  ],
+  "materials": [],
+  "geometries": [],
+  "sources": [],
+  "domain": {
+    "cell_x": "10",
+    "cell_y": "10",
+    "resolution": "20",
+    "pml_width": "1",
+    "pml_mode": "both",
+    "symmetry_enabled": false,
+    "symmetries": []
+  },
+  "flux_monitors": [
+    {
+      "name": "fluxA",
+      "center_x": "0",
+      "center_y": "0",
+      "size_x": "1",
+      "size_y": "0",
+      "fcen": "0.2",
+      "df": "0.1",
+      "nfreq": "32"
+    }
+  ],
+  "analysis": {
+    "kind": "mpb_modesolver",
+    "field_animation": {
+      "component": "Ez",
+      "duration": "200",
+      "interval": "1",
+      "fps": "20",
+      "output_dir": "",
+      "output_name": "anim.mp4"
+    },
+    "harminv": {
+      "component": "Ez",
+      "point_x": "0",
+      "point_y": "0",
+      "fcen": "0.15",
+      "df": "0.1",
+      "until_after_sources": "200",
+      "animation_interval": "1",
+      "animation_fps": "20",
+      "output_dir": "",
+      "output_name": "harminv_animation.mp4",
+      "harminv_log_path": "harminv.txt"
+    },
+    "transmission_spectrum": {
+      "incident_monitor": "ref_inc",
+      "transmission_monitor": "fluxA",
+      "reflection_monitor": "refl",
+      "reference_reflection_monitor": "ref_refl",
+      "until_after_sources": "250",
+      "animate_reference": true,
+      "animate_scattering": true,
+      "animation_component": "Hz",
+      "animation_interval": "2",
+      "animation_fps": "24",
+      "output_dir": "",
+      "output_prefix": "tx_case",
+      "preview_domain": "reference",
+      "reference_state": {
+        "domain": {
+          "cell_x": "14",
+          "cell_y": "8",
+          "resolution": "25",
+          "pml_width": "1.5",
+          "pml_mode": "x",
+          "symmetry_enabled": true,
+          "symmetries": [
+            {
+              "name": "ref_mirror",
+              "kind": "mirror",
+              "direction": "y",
+              "phase": "-1"
+            }
+          ]
+        },
+        "geometries": [],
+        "sources": [],
+        "flux_monitors": [
+          {
+            "name": "ref_inc",
+            "center_x": "0",
+            "center_y": "0",
+            "size_x": "1",
+            "size_y": "0",
+            "fcen": "0.15",
+            "df": "0.1",
+            "nfreq": "50"
+          },
+          {
+            "name": "ref_refl",
+            "center_x": "0",
+            "center_y": "1",
+            "size_x": "1",
+            "size_y": "0",
+            "fcen": "0.15",
+            "df": "0.1",
+            "nfreq": "50"
+          }
+        ]
+      }
+    },
+    "frequency_domain_solver": {
+      "component": "Hz",
+      "tolerance": "1e-9",
+      "max_iters": "2500",
+      "bicgstab_l": "12",
+      "output_dir": "",
+      "output_name": "steady_state.png"
+    },
+    "meep_k_points": {
+      "kpoint_interp": "19",
+      "run_time": "300",
+      "kpoints": [
+        {
+          "kx": "0",
+          "ky": "0"
+        },
+        {
+          "kx": "0.5",
+          "ky": "0"
+        }
+      ],
+      "output_dir": "",
+      "output_prefix": "meep_k_points"
+    },
+    "mpb_modesolver": {
+      "lattice_x": "1",
+      "lattice_y": "1",
+      "basis1_x": "1",
+      "basis1_y": "0",
+      "basis2_x": "0",
+      "basis2_y": "1",
+      "num_bands": "6",
+      "resolution": "24",
+      "unit_cells": "2",
+      "kpoint_interp": "8",
+      "max_mode_images": "12",
+      "run_tm": true,
+      "run_te": true,
+      "kpoints": [],
+      "field_kpoints": []
+    }
+  },
+  "sweep": {
+    "enabled": true,
+    "params": [
+      {
+        "name": "a",
+        "start": "1",
+        "stop": "2",
+        "steps": "3"
+      }
+    ]
+  }
+}

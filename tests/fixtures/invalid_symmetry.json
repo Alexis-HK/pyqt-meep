@@ -1,0 +1,16 @@
+{
+  "domain": {
+    "symmetry_enabled": true,
+    "symmetries": [
+      {
+        "name": "sym1",
+        "kind": "bad_kind",
+        "direction": "bad_dir",
+        "phase": "1j"
+      }
+    ]
+  },
+  "analysis": {
+    "kind": "field_animation"
+  }
+}

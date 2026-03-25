@@ -1,0 +1,113 @@
+parameters:
+- name: rad
+  expr: '5'
+- name: si
+  expr: '2.8'
+- name: air
+  expr: '1'
+- name: width
+  expr: '0.5'
+materials:
+- name: silicon
+  index_expr: si
+- name: airr
+  index_expr: air
+geometries:
+- name: outer
+  kind: circle
+  material: silicon
+  props:
+    center_x: '0'
+    center_y: '0'
+    radius: rad+width/2
+- name: inner
+  kind: circle
+  material: airr
+  props:
+    center_x: '0'
+    center_y: '0'
+    radius: rad-width/2
+sources:
+- name: src
+  kind: gaussian
+  component: Hz
+  props:
+    center_x: '-5.1'
+    center_y: '0.1'
+    size_x: '0'
+    size_y: '0'
+    fcen: '0.65'
+    df: '0.1'
+domain:
+  cell_x: '15'
+  cell_y: '15'
+  resolution: '40'
+  pml_width: '1'
+  pml_mode: both
+flux_monitors: []
+analysis:
+  kind: harminv
+  field_animation:
+    component: Hz
+    duration: '200'
+    interval: '1'
+    fps: '20'
+    output_dir: ''
+    output_name: animation.mp4
+  harminv:
+    component: Hz
+    point_x: '-4.9'
+    point_y: '-0.15'
+    fcen: '0.65'
+    df: '0.1'
+    until_after_sources: '200'
+    animation_interval: '1'
+    animation_fps: '20'
+    output_dir: ''
+    output_name: harminv_animation.mp4
+    harminv_log_path: harminv.txt
+  transmission_spectrum:
+    incident_monitor: ''
+    transmission_monitor: ''
+    reflection_monitor: ''
+    reference_reflection_monitor: ''
+    until_after_sources: '200'
+    animate_reference: false
+    animate_scattering: false
+    animation_component: Ez
+    animation_interval: '1'
+    animation_fps: '20'
+    output_dir: ''
+    output_prefix: transmission
+    preview_domain: scattering
+    reference_state:
+      domain:
+        cell_x: '10'
+        cell_y: '10'
+        resolution: '20'
+        pml_width: '1'
+        pml_mode: both
+      geometries: []
+      sources: []
+      flux_monitors: []
+  mpb_modesolver:
+    lattice_x: '1'
+    lattice_y: '1'
+    basis1_x: '1'
+    basis1_y: '0'
+    basis2_x: '0'
+    basis2_y: '1'
+    num_bands: '1'
+    resolution: '16'
+    unit_cells: '1'
+    kpoint_interp: '10'
+    max_mode_images: '64'
+    run_tm: true
+    run_te: false
+    kpoints: []
+    field_kpoints: []
+sweep:
+  enabled: false
+  max_points: '64'
+  allow_large: false
+  params: []

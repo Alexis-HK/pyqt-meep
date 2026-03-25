@@ -1,0 +1,15 @@
+{
+  "analysis": {
+    "kind": "field_animation"
+  },
+  "animations": [
+    {
+      "path": "/tmp/anim.mp4",
+      "kind": "harminv",
+      "export_name": "anim.mp4",
+      "harminv_lines": [
+        "harminv: freq=0.2"
+      ]
+    }
+  ]
+}
