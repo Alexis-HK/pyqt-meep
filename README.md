@@ -15,7 +15,7 @@
 # How to run
 For now, the application can be run by first creating a Conda environment (the most convenient way to install Meep) with the relevant packages:
 ```
-conda create --name meep-gui --override-channels -c conda-forge python=3.11
+conda create --name meep-gui --override-channels -c conda-forge python=3.12
 conda activate meep-gui
 conda install --override-channels -c conda-forge \
   pymeep mpb pyqt numpy matplotlib pyyaml ffmpeg
@@ -35,5 +35,6 @@ This arose from a research tool, and the application is still in its early phase
 - Fixing the PyQt issue of not seeing animations in the output window
 - Fixing the stop button, potentially by using a ```
 run(..., until=button click) ``` condition
+- Analysis type of a waveguide cross section which computes band structures, fields, etc
 
 
