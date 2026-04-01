@@ -18,8 +18,10 @@ For now, the application can be run by first creating a Conda environment (the m
 conda create --name meep-gui --override-channels -c conda-forge python=3.12
 conda activate meep-gui
 conda install --override-channels -c conda-forge \
-  pymeep mpb pyqt numpy matplotlib pyyaml ffmpeg
+  pymeep mpb pyqt numpy matplotlib pyyaml ffmpeg \
+  gstreamer gst-plugins-base gst-plugins-good gst-libav
 ```
+The extra GStreamer packages help QtMultimedia play exported MP4 animations inside the Output window on Linux.
 
 Then, in the folder, to run the application:
 
@@ -32,9 +34,8 @@ This arose from a research tool, and the application is still in its early phase
 - More material types rather than simple dielectrics, such as common dispersion models, chi2/3 nonlinearities, and conductivity
 - GDS import and more geometry primitives (provided by builtin Meep functions)
 - Executables from PyInstaller for MacOS and certain Linux distros
-- Fixing the PyQt issue of not seeing animations in the output window
+- Fixing the PyQt issue of not seeing animations in the output window (confirmed to now work on WSL/Ubuntu)
 - Fixing the stop button, potentially by using a ```
 run(..., until=button click) ``` condition
 - Analysis type of a waveguide cross section which computes band structures, fields, etc
-
 
