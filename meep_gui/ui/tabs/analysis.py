@@ -133,11 +133,13 @@ class AnalysisTab(QtWidgets.QWidget):
         return self.store.run_manager.analysis_kind or self.store.state.analysis.kind
 
     def _record_run_result(self, result: RunResult, *, show_error: bool) -> None:
-        if result.meta.get("skip_store") != "1":
+        skip_store = result.meta.get("skip_store") == "1"
+        force_killed = result.meta.get("forced_kill") == "1"
+        if not skip_store:
             self.store.add_run_result(result, self._analysis_kind_for_active_run())
         if result.message:
             self.store.log_message(result.message, dedupe=False)
-        if show_error and result.meta.get("skip_store") != "1" and result.status == "failed":
+        if show_error and not skip_store and not force_killed and result.status == "failed":
             _log_error(self.store, result.message or "Run failed.", self)
 
     def _on_run_published(self, result: object) -> None:

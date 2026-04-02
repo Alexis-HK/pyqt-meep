@@ -3,10 +3,10 @@ from __future__ import annotations
 import copy
 import csv
 import os
-import tempfile
 
 from ..model import ProjectState
 from .types import CancelFn, LogFn, PlotResult, RunResult
+from .workspace import create_run_output_dir
 
 
 def _eval_nonnegative_int(expr: str, values: dict[str, float], label: str, *, deps) -> int:
@@ -104,7 +104,7 @@ def run_meep_k_points_impl(
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    out_dir = tempfile.mkdtemp(prefix="meep_gui_meep_k_points_")
+    out_dir = create_run_output_dir("meep_gui_meep_k_points_")
     prefix = cfg.output_prefix.strip() or "meep_k_points"
     csv_path = os.path.join(out_dir, f"{prefix}_bands.csv")
     png_path = os.path.join(out_dir, f"{prefix}_bands.png")

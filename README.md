@@ -30,12 +30,10 @@ python3 app.py
 ```
 In the future, MacOS and Linux executables could be created.
 # Roadmap
-This arose from a research tool, and the application is still in its early phases. As such, there are a number of planned features:
+This arose from a research tool, and the application is still in its early phases. As such, there are a number of planned features/polishes:
 - More material types rather than simple dielectrics, such as common dispersion models, chi2/3 nonlinearities, and conductivity
 - GDS import and more geometry primitives (provided by builtin Meep functions)
 - Executables from PyInstaller for MacOS and certain Linux distros
-- Fixing the PyQt issue of not seeing animations in the output window (confirmed to now work on WSL/Ubuntu)
-- Fixing the stop button, potentially by using a ```
-run(..., until=button click) ``` condition
+- For MacOS: fixing the PyQt issue of not seeing animations in the output window
 - Analysis type of a waveguide cross section which computes band structures, fields, etc
 

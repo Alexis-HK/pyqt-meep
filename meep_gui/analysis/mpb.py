@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 import os
 import shutil
-import tempfile
 
 from ..model import ProjectState
 from .images import save_field_overlay_image
@@ -19,6 +18,7 @@ from .mpb_support import (
     save_image,
 )
 from .types import ArtifactResult, CancelFn, LogFn, RunResult
+from .workspace import create_run_output_dir
 
 _save_image = save_image
 
@@ -86,7 +86,7 @@ def run_mpb_modesolver_impl(
         basis2=mp.Vector3(basis2_x, basis2_y, 0),
     )
 
-    out_dir = tempfile.mkdtemp(prefix="meep_gui_mpb_")
+    out_dir = create_run_output_dir("meep_gui_mpb_")
     band_csv_path = os.path.join(out_dir, "mpb_bands.csv")
     band_png_path = os.path.join(out_dir, "mpb_bands.png")
     eps_png_path = os.path.join(out_dir, "mpb_epsilon.png")

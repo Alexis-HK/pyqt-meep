@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 import os
 import shutil
-import tempfile
 
 from ..model import ProjectState
 from .images import (
@@ -12,6 +11,7 @@ from .images import (
     save_plot2d_field_image,
 )
 from .types import ArtifactResult, CancelFn, LogFn, RunResult
+from .workspace import create_run_output_dir
 
 
 def _eval_positive_int(expr: str, values: dict[str, float], label: str, *, deps) -> int:
@@ -65,7 +65,7 @@ def run_frequency_domain_solver_impl(
     if not hasattr(sim, "get_array"):
         raise RuntimeError("Meep Simulation.get_array() is unavailable.")
 
-    output_dir = tempfile.mkdtemp(prefix="meep_gui_frequency_domain_")
+    output_dir = create_run_output_dir("meep_gui_frequency_domain_")
     output_name = cfg.output_name.strip() or "frequency_domain_field.png"
     output_path = os.path.join(output_dir, output_name)
     csv_name = f"{os.path.splitext(output_name)[0] or 'frequency_domain_field'}.csv"

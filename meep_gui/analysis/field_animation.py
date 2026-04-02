@@ -3,10 +3,10 @@ from __future__ import annotations
 import copy
 import os
 import shutil
-import tempfile
 
 from ..model import ProjectState
 from .types import ArtifactResult, CancelFn, LogFn, RunResult
+from .workspace import create_run_output_dir
 
 
 def run_field_animation_impl(
@@ -34,7 +34,7 @@ def run_field_animation_impl(
     output_dir = cfg.output_dir.strip()
     output_name = cfg.output_name.strip() or "animation.mp4"
 
-    temp_dir = tempfile.mkdtemp(prefix="meep_gui_field_")
+    temp_dir = create_run_output_dir("meep_gui_field_")
     output_path = os.path.join(temp_dir, output_name)
 
     params = deps._build_sim_params(state)

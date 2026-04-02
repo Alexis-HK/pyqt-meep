@@ -221,6 +221,11 @@ def load_transmission(raw: dict | None) -> TransmissionSpectrumConfig:
         animation_fps=as_str(raw.get("animation_fps", "20"), "20"),
         output_dir=as_str(raw.get("output_dir", ""), ""),
         output_prefix=as_str(raw.get("output_prefix", "transmission"), "transmission"),
+        reuse_reference_run_id=as_str(raw.get("reuse_reference_run_id", ""), ""),
+        reuse_reference_csv_name=as_str(
+            raw.get("reuse_reference_csv_name", "transmission_spectrum.csv"),
+            "transmission_spectrum.csv",
+        ),
         preview_domain=as_str(raw.get("preview_domain", "scattering"), "scattering"),
         reference_state=load_transmission_domain_state(raw.get("reference_state", {})),
     )
@@ -367,7 +372,7 @@ def load_state_dict(raw: dict) -> ProjectState:
         flux_monitors=load_flux_monitors(raw.get("flux_monitors", [])),
         analysis=analysis,
         sweep=load_sweep(raw.get("sweep", {})),
-        results=[],
+        results=load_results(raw.get("results", [])),
     )
     state.normalize()
     return state

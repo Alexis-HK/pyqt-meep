@@ -30,6 +30,7 @@ class ProjectStore(QtCore.QObject):
         self._terminal_history: list[str] = []
 
         self.run_manager.log.connect(self.log_message)
+        self.run_manager.terminal.connect(self.terminal_message)
         self.run_manager.state_changed.connect(self._on_run_state_changed)
 
     def notify(self) -> None:

@@ -3,10 +3,10 @@ from __future__ import annotations
 import copy
 import os
 import shutil
-import tempfile
 
 from ..model import ProjectState
 from .types import ArtifactResult, CancelFn, LogFn, RunResult
+from .workspace import create_run_output_dir
 
 
 def run_harminv_impl(
@@ -36,7 +36,7 @@ def run_harminv_impl(
     output_name = cfg.output_name.strip() or "harminv_animation.mp4"
     harminv_log_path = cfg.harminv_log_path.strip() or "harminv.txt"
 
-    temp_dir = tempfile.mkdtemp(prefix="meep_gui_harminv_")
+    temp_dir = create_run_output_dir("meep_gui_harminv_")
     output_path = os.path.join(temp_dir, output_name)
     temp_harminv_txt = os.path.join(temp_dir, "harminv.txt")
 

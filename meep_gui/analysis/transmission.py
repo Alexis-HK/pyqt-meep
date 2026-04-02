@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import os
-import tempfile
 
 from ..model import ProjectState
 from .transmission_support import (
@@ -18,6 +17,7 @@ from .transmission_support import (
     safe_ratio,
 )
 from .types import ArtifactResult, CancelFn, LogFn, PlotResult, RunResult
+from .workspace import create_run_output_dir
 
 
 def run_transmission_spectrum_impl(
@@ -265,7 +265,7 @@ def run_transmission_spectrum_impl(
         refl_vals = reflected.values[:m]
         r_ratio = [safe_ratio(-refl_vals[i], incident_vals[i]) for i in range(m)]
 
-    out_dir = tempfile.mkdtemp(prefix="meep_gui_transmission_")
+    out_dir = create_run_output_dir("meep_gui_transmission_")
     safe_prefix = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in output_prefix) or "transmission"
     artifact, plot = export_transmission_outputs(
         output_dir=out_dir,
