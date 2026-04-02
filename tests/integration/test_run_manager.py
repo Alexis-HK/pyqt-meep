@@ -65,3 +65,20 @@ def test_run_manager_forwards_published_results_and_tracks_analysis_kind(qtbot) 
     qtbot.waitUntil(lambda: published == ["first", "second"], timeout=3000)
     qtbot.waitUntil(lambda: manager.state == "idle", timeout=3000)
     assert manager.analysis_kind == ""
+
+
+def test_run_manager_clears_analysis_kind_after_thread_error(qtbot) -> None:
+    manager = RunManager()
+
+    def _worker(state, log, cancel):
+        raise RuntimeError("boom")
+
+    state = ProjectState(analysis=AnalysisConfig(kind="frequency_domain_solver"))
+    failures: list[str] = []
+    manager.failed.connect(failures.append)
+
+    assert manager.start(_worker, state)
+    assert manager.analysis_kind == "frequency_domain_solver"
+    qtbot.waitUntil(lambda: failures == ["boom"], timeout=3000)
+    qtbot.waitUntil(lambda: manager.state == "idle", timeout=3000)
+    assert manager.analysis_kind == ""

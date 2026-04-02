@@ -219,11 +219,13 @@ class RunManager(QtCore.QObject):
         self._transition("finished")
         self.completed.emit(result)
         self._transition("idle")
+        self._analysis_kind = ""
 
     def _on_error(self, message: str) -> None:
         self._transition("failed")
         self.failed.emit(message)
         self._transition("idle")
+        self._analysis_kind = ""
 
     def _on_thread_finished(self) -> None:
         if self._thread is not None:
