@@ -5,6 +5,7 @@ import os
 import shutil
 
 from ..model import ProjectState
+from .domain_artifacts import create_domain_preview_artifacts
 from .types import ArtifactResult, CancelFn, LogFn, RunResult
 from .workspace import create_run_output_dir
 
@@ -73,15 +74,26 @@ def run_field_animation_impl(
     plots = deps._export_flux_plots(sim_result.flux_results, temp_dir, log)
     log("Animation ready. Use Export in the Output window to save it.")
 
-    artifact = ArtifactResult(
-        kind="animation_mp4",
-        label=output_name,
-        path=output_path,
-        meta={"export_dir": output_dir, "export_name": output_name},
+    artifacts = [
+        ArtifactResult(
+            kind="animation_mp4",
+            label=output_name,
+            path=output_path,
+            meta={"export_dir": output_dir, "export_name": output_name},
+        )
+    ]
+    artifacts.extend(
+        create_domain_preview_artifacts(
+            state,
+            temp_dir,
+            log,
+            export_dir=output_dir,
+            build_sim_impl=getattr(deps, "build_sim", None),
+        )
     )
     return RunResult(
         status="completed",
         message="Field animation completed.",
-        artifacts=[artifact],
+        artifacts=artifacts,
         plots=plots,
     )

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
 from types import SimpleNamespace
 
 import pytest
 
 import meep_gui.analysis as analysis
+import meep_gui.analysis.domain_artifacts as domain_artifacts_module
 import meep_gui.analysis.transmission as transmission_module
 from meep_gui.analysis import (
     ArtifactResult,
@@ -330,6 +332,7 @@ def test_run_field_animation_wrapper_uses_patched_run_sim(monkeypatch) -> None:
 
     assert result.status == "completed"
     assert len(calls) == 1
+    assert any(item.kind == "domain_preview_png" for item in result.artifacts)
 
 
 def test_frequency_domain_run_uses_force_complex_fields_and_emits_png_and_csv(monkeypatch) -> None:
@@ -382,11 +385,13 @@ def test_frequency_domain_run_uses_force_complex_fields_and_emits_png_and_csv(mo
     )
 
     assert result.status == "completed"
-    assert len(result.artifacts) == 2
+    assert len(result.artifacts) == 3
     assert result.artifacts[0].kind == "frequency_domain_field_png"
     assert result.artifacts[1].kind == "frequency_domain_field_csv"
+    assert result.artifacts[2].kind == "domain_preview_png"
     assert result.artifacts[0].path
     assert result.artifacts[1].path
+    assert result.artifacts[2].path
     assert result.plots == []
     assert build_calls == [True]
     assert logs[0].startswith("Warning: no sources are configured")
@@ -611,7 +616,7 @@ def test_meep_k_points_emits_plot_and_csv(monkeypatch) -> None:
     result = run_by_kind(state, _log, _no_cancel)
 
     assert result.status == "completed"
-    assert result.artifacts == []
+    assert [item.kind for item in result.artifacts] == ["domain_preview_png"]
     assert len(result.plots) == 1
     assert sim.calls and sim.calls[0][0] == 300.0
     assert len(sim.calls[0][1]) == 3
@@ -621,6 +626,83 @@ def test_meep_k_points_emits_plot_and_csv(monkeypatch) -> None:
     csv_text = open(result.plots[0].csv_path, "r", encoding="utf-8").read()
     assert "k_index,kx,ky,mode,freq_real,freq_imag" in csv_text
     assert "0,0.0,0.0,1,0.2,0.01" in csv_text
+
+
+def test_create_domain_preview_artifacts_writes_single_preview_for_fdtd(tmp_path) -> None:
+    pytest.importorskip("matplotlib")
+
+    class _FakeSim:
+        def plot2D(self, ax=None):
+            ax.imshow([[1, 1], [1, 1]])
+
+    logs: list[str] = []
+    artifacts = domain_artifacts_module.create_domain_preview_artifacts(
+        ProjectState(analysis=AnalysisConfig(kind="field_animation")),
+        str(tmp_path),
+        logs.append,
+        build_sim_impl=lambda _params, _log: _FakeSim(),
+    )
+
+    assert [item.label for item in artifacts] == ["domain_preview.png"]
+    assert artifacts[0].kind == "domain_preview_png"
+    assert artifacts[0].path.endswith("domain_preview.png")
+    assert artifacts[0].meta["export_name"] == "domain_preview.png"
+    assert artifacts[0].path and os.path.exists(artifacts[0].path)
+    assert logs == []
+
+
+def test_create_domain_preview_artifacts_writes_reference_and_scattering_for_transmission(
+    tmp_path,
+) -> None:
+    pytest.importorskip("matplotlib")
+
+    class _FakeSim:
+        def plot2D(self, ax=None):
+            ax.imshow([[1, 1], [1, 1]])
+
+    state = ProjectState(
+        sources=[
+            SourceItem(
+                name="dev_src",
+                kind="gaussian",
+                component="Ez",
+                props={"fcen": "0.2", "df": "0.1"},
+            )
+        ],
+        flux_monitors=[FluxMonitorConfig(name="dev_tx")],
+        analysis=AnalysisConfig(
+            kind="transmission_spectrum",
+            transmission_spectrum=TransmissionSpectrumConfig(
+                incident_monitor="ref_inc",
+                transmission_monitor="dev_tx",
+                reference_state=TransmissionDomainState(
+                    sources=[
+                        SourceItem(
+                            name="ref_src",
+                            kind="gaussian",
+                            component="Ez",
+                            props={"fcen": "0.2", "df": "0.1"},
+                        )
+                    ],
+                    flux_monitors=[FluxMonitorConfig(name="ref_inc")],
+                ),
+            ),
+        )
+    )
+
+    artifacts = domain_artifacts_module.create_domain_preview_artifacts(
+        state,
+        str(tmp_path),
+        _log,
+        build_sim_impl=lambda _params, _log: _FakeSim(),
+    )
+
+    assert [item.label for item in artifacts] == [
+        "domain_preview_reference.png",
+        "domain_preview_scattering.png",
+    ]
+    assert all(item.kind == "domain_preview_png" for item in artifacts)
+    assert all(item.path and os.path.exists(item.path) for item in artifacts)
 
 
 def test_sweep_dispatches_meep_k_points(monkeypatch) -> None:

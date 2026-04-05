@@ -10,6 +10,7 @@ from ..model import ProjectState
 from ..primitives import monitor_kind
 from .analyses import emit_flux_exports
 from .common import line
+from .domain_preview import emit_domain_preview_call, emit_domain_preview_helpers
 from .simulation import (
     emit_geometry,
     emit_materials,
@@ -255,6 +256,23 @@ def _build_analysis_body(
         force_complex_fields=prepared.recipe.script_force_complex_fields(prepared.plan),
         include_flux_monitors=prepared.recipe.script_include_flux_monitors(prepared.plan),
     )
+    if prepared.plan.backend == "meep_fdtd" and prepared.recipe.uses_fdtd_script_setup(prepared.plan):
+        marker_expr = None
+        if state.analysis.kind == "harminv":
+            marker_expr = (
+                state.analysis.harminv.point_x,
+                state.analysis.harminv.point_y,
+            )
+        emit_domain_preview_call(
+            body,
+            prefix="run",
+            sim_var="sim",
+            output_name="domain_preview.png",
+            title="Domain Preview",
+            domain=scene.domain,
+            monitors=scene.monitors,
+            marker_expr=marker_expr,
+        )
     prepared.recipe.emit_script(state, prepared.plan, body)
 
     if scene.monitors and prepared.recipe.script_include_flux_exports(prepared.plan):
@@ -347,6 +365,8 @@ def generate_script(state: ProjectState, log: LogFn | None = None) -> str:
     lines: list[str] = []
     _emit_header(lines, prepared.plan)
     _emit_runtime_helpers(lines, scene, include_sweep_helpers=sweep_enabled)
+    if prepared.plan.backend == "meep_fdtd":
+        emit_domain_preview_helpers(lines)
     _emit_run_function(lines, _build_analysis_body(state, prepared, scene))
     line(lines, f"# Analysis type: {prepared.recipe.display_name}")
     if sweep_enabled:

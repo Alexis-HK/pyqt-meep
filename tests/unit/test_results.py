@@ -101,3 +101,20 @@ def test_run_result_normalization_preserves_inline_text_and_csv_outputs() -> Non
     assert isinstance(artifacts[1], TableArtifact)
     assert isinstance(artifacts[2], CurveArtifact)
 
+
+def test_domain_preview_png_normalizes_as_image_artifact() -> None:
+    result = RunResult(
+        status="completed",
+        artifacts=[
+            ArtifactResult(
+                kind="domain_preview_png",
+                label="domain_preview.png",
+                path="/tmp/domain_preview.png",
+            )
+        ],
+    )
+
+    artifacts = typed_artifacts_from_run_result(result)
+
+    assert len(artifacts) == 1
+    assert isinstance(artifacts[0], ImageArtifact)

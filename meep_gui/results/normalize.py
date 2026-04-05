@@ -20,7 +20,14 @@ from .types import (
 )
 
 _ANIMATION_KINDS = {"animation_mp4"}
-_IMAGE_KINDS = {"plot_png", "frequency_domain_field_png", "mpb_band_png", "mpb_epsilon_png", "mpb_mode_png"}
+_IMAGE_KINDS = {
+    "plot_png",
+    "frequency_domain_field_png",
+    "mpb_band_png",
+    "mpb_epsilon_png",
+    "mpb_mode_png",
+    "domain_preview_png",
+}
 _TABLE_KINDS = {"plot_csv", "transmission_csv", "frequency_domain_field_csv", "mpb_band_csv"}
 _TEXT_KINDS = {"text", "harminv_text"}
 _SCRIPT_KINDS = {"generated_script"}
@@ -212,4 +219,3 @@ def _default_export_name(artifact: TypedArtifact) -> str:
     if stem.lower().endswith(suffix):
         return stem
     return f"{stem}{suffix}"
-

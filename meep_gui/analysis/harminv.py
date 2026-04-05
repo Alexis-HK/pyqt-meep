@@ -5,6 +5,7 @@ import os
 import shutil
 
 from ..model import ProjectState
+from .domain_artifacts import create_domain_preview_artifacts
 from .types import ArtifactResult, CancelFn, LogFn, RunResult
 from .workspace import create_run_output_dir
 
@@ -107,6 +108,15 @@ def run_harminv_impl(
             meta={"export_path": harminv_log_path},
         ),
     ]
+    artifacts.extend(
+        create_domain_preview_artifacts(
+            state,
+            temp_dir,
+            log,
+            export_dir=output_dir,
+            build_sim_impl=getattr(deps, "build_sim", None),
+        )
+    )
     return RunResult(
         status="completed",
         message="Harminv analysis completed.",

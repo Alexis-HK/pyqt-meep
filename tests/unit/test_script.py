@@ -42,8 +42,10 @@ def test_harminv_script_writes_outputs_to_subfolder() -> None:
     assert "symmetries=symmetries" in code
     assert "out_dir = os.path.join(script_dir, 'harminv_outputs')" in code
     assert "os.makedirs(out_dir, exist_ok=True)" in code
+    assert "run_domain_preview_out = os.path.join(out_dir, 'domain_preview.png')" in code
     assert "anim_out = os.path.join(out_dir, \"harminv_animation.mp4\")" in code
     assert "harminv_out = os.path.join(out_dir, \"harminv.txt\")" in code
+    assert "marker_expr=('0', '0')" in code
     assert "with open(harminv_out, 'w', encoding='utf-8') as f:" in code
 
 
@@ -55,6 +57,7 @@ def test_field_animation_script_uses_out_dir_and_flux_exports() -> None:
 
     code = generate_script(state)
 
+    assert "run_domain_preview_out = os.path.join(out_dir, 'domain_preview.png')" in code
     assert "anim_out = os.path.join(out_dir, \"animation.mp4\")" in code
     assert "anim_out = os.path.join(script_dir, \"animation.mp4\")" not in code
     assert "csv_path = os.path.join(out_dir, f'{monitor_name}_flux.csv')" in code
@@ -89,6 +92,7 @@ def test_mpb_script_includes_te_tm_field_and_tutorial_epsilon_plot() -> None:
     assert "plt.imshow(converted_eps.T, interpolation='spline36', cmap='binary')" in code
     assert "plt.imshow(arr.T, interpolation='spline36', cmap='RdBu'" in code
     assert "mode_{pol}_k{k_idx:03d}_b{band:03d}.png" in code
+    assert "domain_preview.png" not in code
 
 
 def test_mpb_script_skips_field_image_fallback_when_no_field_kpoints() -> None:
@@ -109,6 +113,7 @@ def test_mpb_script_skips_field_image_fallback_when_no_field_kpoints() -> None:
     assert "# Field images are only generated for explicitly configured field_k_points." in code
     assert "band_csv = os.path.join(out_dir, 'mpb_bands.csv')" in code
     assert "plt.savefig(os.path.join(out_dir, 'mpb_epsilon.png'))" in code
+    assert "domain_preview.png" not in code
 
 
 def test_transmission_script_uses_split_reference_and_scattering_state() -> None:
@@ -168,9 +173,11 @@ def test_transmission_script_uses_split_reference_and_scattering_state() -> None
     assert "dev_symmetries = []" in code
     assert "sim_ref = mp.Simulation(" in code
     assert "symmetries=ref_symmetries" in code
+    assert "ref_domain_preview_out = os.path.join(out_dir, 'domain_preview_reference.png')" in code
     assert "ref_flux_handles['ref_inc'] = sim_ref.add_flux" in code
     assert "dev_flux_handles['dev_tx'] = sim_dev.add_flux" in code
     assert "symmetries=dev_symmetries" in code
+    assert "dev_domain_preview_out = os.path.join(out_dir, 'domain_preview_scattering.png')" in code
     assert "sim_dev.load_minus_flux_data(dev_flux_handles[refl_monitor_name], minus_flux_data)" in code
     assert "ref_anim = mp.Animate2D(fields=anim_component, realtime=False) if animate_ref else None" in code
     assert "dev_anim = mp.Animate2D(fields=anim_component, realtime=False) if animate_dev else None" in code
@@ -215,6 +222,7 @@ def test_frequency_domain_script_uses_solve_cw_and_omits_flux_exports() -> None:
     assert "if hasattr(sim, 'plot2D'):" in code
     assert "sim.plot2D(" in code
     assert "out_dir = os.path.join(script_dir, 'frequency_domain_outputs')" in code
+    assert "run_domain_preview_out = os.path.join(out_dir, 'domain_preview.png')" in code
     assert "sim.add_flux" not in code
     assert "for monitor_name, monitor_obj in flux_monitors:" not in code
 
@@ -270,6 +278,7 @@ def test_meep_k_points_script_emits_run_k_points_plot_and_csv() -> None:
     assert "out_dir = os.path.join(script_dir, 'meep_k_points_outputs')" in code
     assert "k_points = mp.interpolate(int(19), input_k_points)" in code
     assert "all_freqs = sim.run_k_points(300, k_points)" in code
+    assert "run_domain_preview_out = os.path.join(out_dir, 'domain_preview.png')" in code
     assert "writer.writerow(['k_index', 'kx', 'ky', 'mode', 'freq_real', 'freq_imag'])" in code
     assert "plt.xlabel('k-index')" in code
     assert "plt.scatter(scatter_x, scatter_y, s=18, color='#1f77b4')" in code
@@ -408,6 +417,7 @@ def test_sweep_enabled_script_emits_runner_and_folder_layout() -> None:
     assert "run_analysis(run_dir, overrides={name: value})" in code
     assert "print(f\"Sweep {queue_index}/{queue_total}: {label} ({point_index}/{point_total} for {name})\")" in code
     assert "parameter_values = _build_parameter_values(overrides)" in code
+    assert "run_domain_preview_out = os.path.join(out_dir, 'domain_preview.png')" in code
 
 
 def test_sweep_enabled_script_emits_app_like_value_expansion_rules() -> None:

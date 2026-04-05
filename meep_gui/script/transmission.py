@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 from .common import line
+from .domain_preview import emit_domain_preview_call
 from .simulation import (
     emit_boundary_layers,
     emit_flux_handles,
@@ -118,10 +119,19 @@ def emit_transmission(lines: list[str], state, scattering_scene, reference_scene
         "        minus_flux_data = sim_ref.get_flux_data(ref_flux_handles[ref_refl_monitor_name])",
         "    elif refl_monitor_name:",
         "        print('Warning: reflection monitor selected without reference reflection monitor; running without minus-flux subtraction.')",
-        "",
-        "# Scattering-domain setup",
     ):
         line(lines, text)
+    emit_domain_preview_call(
+        lines,
+        prefix="ref",
+        sim_var="sim_ref",
+        output_name="domain_preview_reference.png",
+        title="Domain Preview (reference)",
+        domain=reference_scene.domain,
+        monitors=reference_scene.monitors,
+    )
+    line(lines)
+    line(lines, "# Scattering-domain setup")
 
     emit_boundary_layers(lines, "dev_boundary_layers", scattering_scene.domain)
     line(lines)
@@ -146,6 +156,18 @@ def emit_transmission(lines: list[str], state, scattering_scene, reference_scene
         "    raise ValueError(f\"Reflection monitor '{refl_monitor_name}' not found in scattering monitors.\")",
         "if refl_monitor_name and minus_flux_data is not None:",
         "    sim_dev.load_minus_flux_data(dev_flux_handles[refl_monitor_name], minus_flux_data)",
+    ):
+        line(lines, text)
+    emit_domain_preview_call(
+        lines,
+        prefix="dev",
+        sim_var="sim_dev",
+        output_name="domain_preview_scattering.png",
+        title="Domain Preview (scattering)",
+        domain=scattering_scene.domain,
+        monitors=scattering_scene.monitors,
+    )
+    for text in (
         "dev_anim = mp.Animate2D(fields=anim_component, realtime=False) if animate_dev else None",
         "dev_step_funcs = []",
         "if dev_anim is not None:",

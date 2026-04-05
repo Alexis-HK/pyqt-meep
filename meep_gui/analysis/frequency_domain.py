@@ -5,6 +5,7 @@ import os
 import shutil
 
 from ..model import ProjectState
+from .domain_artifacts import create_domain_preview_artifacts
 from .images import (
     save_field_array_csv,
     save_field_overlay_image,
@@ -122,28 +123,38 @@ def run_frequency_domain_solver_impl(
         "component": cfg.component,
         "field_part": "real",
     }
+    artifacts = [
+        ArtifactResult(
+            kind="frequency_domain_field_png",
+            label=output_name,
+            path=output_path,
+            meta={
+                **common_meta,
+                "export_name": output_name,
+            },
+        ),
+        ArtifactResult(
+            kind="frequency_domain_field_csv",
+            label=csv_name,
+            path=csv_path,
+            meta={
+                **common_meta,
+                "export_name": csv_name,
+            },
+        ),
+    ]
+    artifacts.extend(
+        create_domain_preview_artifacts(
+            state,
+            output_dir,
+            log,
+            export_dir=cfg.output_dir.strip(),
+            build_sim_impl=getattr(deps, "build_sim", None),
+        )
+    )
     return RunResult(
         status="completed",
         message="Frequency-domain solver completed.",
-        artifacts=[
-            ArtifactResult(
-                kind="frequency_domain_field_png",
-                label=output_name,
-                path=output_path,
-                meta={
-                    **common_meta,
-                    "export_name": output_name,
-                },
-            ),
-            ArtifactResult(
-                kind="frequency_domain_field_csv",
-                label=csv_name,
-                path=csv_path,
-                meta={
-                    **common_meta,
-                    "export_name": csv_name,
-                },
-            ),
-        ],
+        artifacts=artifacts,
         plots=[],
     )

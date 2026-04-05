@@ -5,6 +5,7 @@ import csv
 import os
 
 from ..model import ProjectState
+from .domain_artifacts import create_domain_preview_artifacts
 from .types import CancelFn, LogFn, PlotResult, RunResult
 from .workspace import create_run_output_dir
 
@@ -141,10 +142,16 @@ def run_meep_k_points_impl(
     message = "Meep k points completed."
     if not rows:
         message = "Meep k points completed. No frequencies were found."
+    artifacts = create_domain_preview_artifacts(
+        state,
+        out_dir,
+        log,
+        build_sim_impl=getattr(deps, "build_sim", None),
+    )
     return RunResult(
         status="completed",
         message=message,
-        artifacts=[],
+        artifacts=artifacts,
         plots=[
             PlotResult(
                 title="Meep K-Points Bands",

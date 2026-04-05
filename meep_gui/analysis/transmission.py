@@ -4,6 +4,7 @@ import copy
 import os
 
 from ..model import ProjectState
+from .domain_artifacts import create_domain_preview_artifacts
 from .transmission_support import (
     align_reused_incident_data,
     artifact_path_by_kind,
@@ -293,6 +294,15 @@ def run_transmission_spectrum_impl(
                 meta={"domain": "scattering"},
             )
         )
+    artifacts.extend(
+        create_domain_preview_artifacts(
+            state,
+            out_dir,
+            log,
+            export_dir=output_dir_cfg,
+            build_sim_impl=getattr(deps, "build_sim", None),
+        )
+    )
 
     if output_dir_cfg:
         for item in artifacts:
