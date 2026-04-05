@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from PyQt5 import QtWidgets
 
-from ...model import GEOMETRY_KINDS, GeometryItem
+from ...model import GeometryItem
+from ...primitives import GEOMETRY_REGISTRY, geometry_kind
 from ...store import ProjectStore
 from ...validation import validate_name, validate_numeric_expression
 from ..common import _log_error, _mark_row_warning, _set_invalid
@@ -18,13 +19,20 @@ class GeometryTab(QtWidgets.QWidget):
 
         self.name_input = QtWidgets.QLineEdit()
         self.kind_input = QtWidgets.QComboBox()
-        self.kind_input.addItems(list(GEOMETRY_KINDS))
+        self.kind_input.addItems(list(GEOMETRY_REGISTRY))
         self.material_input = QtWidgets.QComboBox()
         self.center_x = QtWidgets.QLineEdit()
         self.center_y = QtWidgets.QLineEdit()
         self.size_x = QtWidgets.QLineEdit()
         self.size_y = QtWidgets.QLineEdit()
         self.radius = QtWidgets.QLineEdit()
+        self._prop_widgets = {
+            "center_x": self.center_x,
+            "center_y": self.center_y,
+            "size_x": self.size_x,
+            "size_y": self.size_y,
+            "radius": self.radius,
+        }
 
         form = QtWidgets.QFormLayout()
         form.addRow("Name", self.name_input)
@@ -73,14 +81,9 @@ class GeometryTab(QtWidgets.QWidget):
         return -1
 
     def _sync_kind_fields(self, kind: str) -> None:
-        if kind == "circle":
-            self.radius.setEnabled(True)
-            self.size_x.setEnabled(False)
-            self.size_y.setEnabled(False)
-        else:
-            self.radius.setEnabled(False)
-            self.size_x.setEnabled(True)
-            self.size_y.setEnabled(True)
+        enabled = {field.field_id for field in geometry_kind(kind).fields}
+        for field_id, widget in self._prop_widgets.items():
+            widget.setEnabled(field_id in enabled)
 
     def _validate(self, name: str, kind: str, material: str, row: int) -> bool:
         scope = active_scope(self.store)
@@ -102,24 +105,21 @@ class GeometryTab(QtWidgets.QWidget):
         _set_invalid(self.material_input, False)
 
         allowed = parameter_names(self.store)
-        fields = {
-            "center_x": self.center_x,
-            "center_y": self.center_y,
-        }
-        if kind == "circle":
-            fields["radius"] = self.radius
-        else:
-            fields["size_x"] = self.size_x
-            fields["size_y"] = self.size_y
-
         ok = True
-        for label, widget in fields.items():
+        for field in geometry_kind(kind).fields:
+            widget = self._prop_widgets[field.field_id]
             result = validate_numeric_expression(widget.text().strip(), allowed)
             _set_invalid(widget, not result.ok)
             if not result.ok:
-                _log_error(self.store, f"{label}: {result.message}", self)
+                _log_error(self.store, f"{field.field_id}: {result.message}", self)
                 ok = False
         return ok
+
+    def _build_props(self, kind: str) -> dict[str, str]:
+        return {
+            field.field_id: self._prop_widgets[field.field_id].text().strip()
+            for field in geometry_kind(kind).fields
+        }
 
     def _on_add(self) -> None:
         name = self.name_input.text().strip()
@@ -129,15 +129,7 @@ class GeometryTab(QtWidgets.QWidget):
         row = len(geometries)
         if not self._validate(name, kind, material, row):
             return
-        props = {
-            "center_x": self.center_x.text().strip(),
-            "center_y": self.center_y.text().strip(),
-        }
-        if kind == "circle":
-            props["radius"] = self.radius.text().strip()
-        else:
-            props["size_x"] = self.size_x.text().strip()
-            props["size_y"] = self.size_y.text().strip()
+        props = self._build_props(kind)
         geometries.append(GeometryItem(name=name, kind=kind, material=material, props=props))
         self.store.notify()
 
@@ -175,11 +167,8 @@ class GeometryTab(QtWidgets.QWidget):
         self.name_input.setText(item.name)
         self.kind_input.setCurrentText(item.kind)
         self.material_input.setCurrentText(item.material)
-        self.center_x.setText(item.props.get("center_x", ""))
-        self.center_y.setText(item.props.get("center_y", ""))
-        self.size_x.setText(item.props.get("size_x", ""))
-        self.size_y.setText(item.props.get("size_y", ""))
-        self.radius.setText(item.props.get("radius", ""))
+        for field_id, widget in self._prop_widgets.items():
+            widget.setText(item.props.get(field_id, ""))
         self._sync_kind_fields(item.kind)
         _set_invalid(self.name_input, False)
 
@@ -196,20 +185,12 @@ class GeometryTab(QtWidgets.QWidget):
             self.table.setItem(row, 0, QtWidgets.QTableWidgetItem(geo.name))
             self.table.setItem(row, 1, QtWidgets.QTableWidgetItem(geo.kind))
             self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(geo.material))
-            fields: list[tuple[str, str]] = [
-                ("center_x", geo.props.get("center_x", "")),
-                ("center_y", geo.props.get("center_y", "")),
-            ]
-            if geo.kind == "circle":
-                fields.append(("radius", geo.props.get("radius", "")))
-            else:
-                fields.append(("size_x", geo.props.get("size_x", "")))
-                fields.append(("size_y", geo.props.get("size_y", "")))
             message = ""
-            for label, value in fields:
+            for field in geometry_kind(geo.kind).fields:
+                value = geo.props.get(field.field_id, "")
                 result = validate_numeric_expression(value, allowed)
                 if not result.ok:
-                    message = f"Geometry '{geo.name}': {label} {result.message}"
+                    message = f"Geometry '{geo.name}': {field.field_id} {result.message}"
                     break
             if message:
                 key = geo.name or f"row-{row}"

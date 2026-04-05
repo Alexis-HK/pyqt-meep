@@ -5,6 +5,7 @@ import os
 from PyQt5 import QtCore, QtWidgets
 
 from ...model import RunRecord
+from ...results import ArtifactDisplayEntry, display_entries_from_run_record
 from ...store import ProjectStore
 from ..panels.output_artifacts import OutputArtifactsPanel
 from ..panels.output_history import OutputHistoryPanel
@@ -16,7 +17,7 @@ class ResultBrowserWidget(QtWidgets.QWidget):
         super().__init__(parent)
         self._store = store
         self._current_run: RunRecord | None = None
-        self._display_artifacts: list[dict[str, str]] = []
+        self._display_artifacts: list[ArtifactDisplayEntry] = []
 
         self.history = OutputHistoryPanel(self)
         self.artifacts = OutputArtifactsPanel(self)
@@ -98,11 +99,10 @@ class ResultBrowserWidget(QtWidgets.QWidget):
             return None
         return self._display_artifacts[row]
 
-    def _is_exportable_artifact(self, artifact: dict[str, str]) -> bool:
-        path = artifact.get("path", "")
-        return bool((path and os.path.exists(path)) or artifact.get("text", ""))
+    def _is_exportable_artifact(self, artifact: ArtifactDisplayEntry) -> bool:
+        return bool((artifact.path and os.path.exists(artifact.path)) or artifact.text)
 
-    def _exportable_artifacts(self) -> list[dict[str, str]]:
+    def _exportable_artifacts(self) -> list[ArtifactDisplayEntry]:
         return [item for item in self._display_artifacts if self._is_exportable_artifact(item)]
 
     def _on_run_selected(self, _row: int) -> None:
@@ -120,50 +120,20 @@ class ResultBrowserWidget(QtWidgets.QWidget):
 
         self.remove_run_button.setDisabled(False)
         self.run_status.setText(f"Status: {run.status} | {run.message or 'No message'}")
-        seen_paths: set[str] = set()
-        for artifact in run.artifacts:
-            entry = {
-                "kind": artifact.kind,
-                "label": artifact.label,
-                "path": artifact.path,
-                "text": artifact.meta.get("lines", ""),
-            }
-            self._display_artifacts.append(entry)
-            if artifact.path:
-                seen_paths.add(artifact.path)
-            text = f"{entry['kind']}: {entry['label']}"
+        self._display_artifacts = list(display_entries_from_run_record(run))
+        for idx, artifact in enumerate(self._display_artifacts):
+            text = artifact.list_label
             if artifact.path and not os.path.exists(artifact.path):
                 text += " [missing]"
             item = QtWidgets.QListWidgetItem(text)
-            item.setData(QtCore.Qt.UserRole, len(self._display_artifacts) - 1)
+            item.setData(QtCore.Qt.UserRole, idx)
             self.artifact_list.addItem(item)
 
-        for plot in run.plots:
-            for kind, path, label in (
-                ("plot_png", plot.png_path, f"{plot.title or 'Plot'} (PNG)"),
-                ("plot_csv", plot.csv_path, f"{plot.title or 'Plot'} (CSV)"),
-            ):
-                if not path or path in seen_paths:
-                    continue
-                entry = {
-                    "kind": kind,
-                    "label": label,
-                    "path": path,
-                    "text": "",
-                }
-                self._display_artifacts.append(entry)
-                seen_paths.add(path)
-                text = entry["label"]
-                if not os.path.exists(path):
-                    text += " [missing]"
-                item = QtWidgets.QListWidgetItem(text)
-                item.setData(QtCore.Qt.UserRole, len(self._display_artifacts) - 1)
-                self.artifact_list.addItem(item)
+        if not self._display_artifacts:
+            self.preview.show_text("No artifacts in this run.")
 
         if self.artifact_list.count() > 0:
             self.artifact_list.setCurrentRow(0)
-        else:
-            self.preview.show_text("No artifacts in this run.")
         self.export_all_button.setDisabled(len(self._exportable_artifacts()) <= 1)
 
     def _on_artifact_selected(self, _row: int) -> None:
@@ -179,10 +149,9 @@ class ResultBrowserWidget(QtWidgets.QWidget):
         artifact = self._selected_artifact()
         if artifact is None:
             return
-        kind = artifact.get("kind", "")
-        path = artifact.get("path", "")
-        text = artifact.get("text", "")
-        default_name = os.path.basename(path) if path else f"{kind}.txt"
+        path = artifact.path
+        text = artifact.text
+        default_name = artifact.export_name or (os.path.basename(path) if path else "artifact.txt")
         out_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Export Artifact", default_name)
         if not out_path:
             return
@@ -191,7 +160,7 @@ class ResultBrowserWidget(QtWidgets.QWidget):
                 import shutil
 
                 shutil.copyfile(path, out_path)
-            elif kind == "harminv_text" and text:
+            elif text:
                 with open(out_path, "w", encoding="utf-8") as handle:
                     handle.write(text + "\n")
             else:
@@ -235,9 +204,9 @@ class ResultBrowserWidget(QtWidgets.QWidget):
         failed = 0
         for artifact in exportable:
             try:
-                src = artifact.get("path", "")
-                text = artifact.get("text", "")
-                label = artifact.get("label", "").strip() or artifact.get("kind", "artifact")
+                src = artifact.path
+                text = artifact.text
+                label = artifact.export_name.strip() or artifact.label.strip() or "artifact"
                 if src and os.path.exists(src):
                     import shutil
 

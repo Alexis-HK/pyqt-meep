@@ -54,11 +54,17 @@
 - Phase 3 is complete for the current batch:
   - scene-feature extraction and backend/recipe support status are validated during runtime/script preparation
   - `SUPPORTED` proceeds silently, `IGNORED` produces warnings, and `FORBIDDEN` blocks execution/export
-- Phase 4 and Phase 5 remain deferred.
+- Phase 4 is complete for the current batch:
+  - `meep_gui.results` provides a typed artifact layer behind `RunRecord.artifacts` and `RunRecord.plots`
+  - output/history rendering now normalizes legacy run outputs through typed artifacts before preview/export dispatch
+- Phase 5 is complete for the current batch:
+  - `meep_gui.primitives` is the source of truth for current material, geometry, source, and monitor kind metadata
+  - model constants remain as compatibility adapters derived from the registries
+  - scene/runtime/script/MPB lowering and the current geometry/source/monitor editors now reuse registry metadata/hooks
 
 ## Constraints kept during this batch
 - No flag-day rewrite
 - Existing YAML project schema remains unchanged for current features
 - Existing generated-script semantics remain stable for current features
 - The Qt editor model remains in place
-- `RunRecord`, `ResultArtifact`, and `PlotRecord` remain unchanged in this batch
+- `RunRecord`, `ResultArtifact`, and `PlotRecord` remain unchanged as compatibility surfaces in this batch

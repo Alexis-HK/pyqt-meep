@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from PyQt5 import QtWidgets
 
-from ...model import FIELD_COMPONENTS, SOURCE_KINDS, SourceItem
+from ...model import FIELD_COMPONENTS, SourceItem
+from ...primitives import SOURCE_REGISTRY, source_kind
 from ...store import ProjectStore
 from ...validation import validate_name, validate_numeric_expression
 from ..common import _log_error, _mark_row_warning, _set_invalid
@@ -18,7 +19,7 @@ class SourcesTab(QtWidgets.QWidget):
 
         self.name_input = QtWidgets.QLineEdit()
         self.kind_input = QtWidgets.QComboBox()
-        self.kind_input.addItems(list(SOURCE_KINDS))
+        self.kind_input.addItems(list(SOURCE_REGISTRY))
         self.component_input = QtWidgets.QComboBox()
         self.component_input.addItems(list(FIELD_COMPONENTS))
         self.center_x = QtWidgets.QLineEdit()
@@ -27,6 +28,14 @@ class SourcesTab(QtWidgets.QWidget):
         self.size_y = QtWidgets.QLineEdit()
         self.fcen = QtWidgets.QLineEdit()
         self.df = QtWidgets.QLineEdit()
+        self._prop_widgets = {
+            "center_x": self.center_x,
+            "center_y": self.center_y,
+            "size_x": self.size_x,
+            "size_y": self.size_y,
+            "fcen": self.fcen,
+            "df": self.df,
+        }
 
         form = QtWidgets.QFormLayout()
         form.addRow("Name", self.name_input)
@@ -76,7 +85,9 @@ class SourcesTab(QtWidgets.QWidget):
         return -1
 
     def _sync_kind_fields(self, kind: str) -> None:
-        self.df.setEnabled(kind == "gaussian")
+        enabled = {field.field_id for field in source_kind(kind).fields}
+        for field_id, widget in self._prop_widgets.items():
+            widget.setEnabled(field_id in enabled)
 
     def _validate(self, name: str, kind: str, row: int) -> bool:
         scope = active_scope(self.store)
@@ -92,24 +103,21 @@ class SourcesTab(QtWidgets.QWidget):
             return False
 
         allowed = parameter_names(self.store)
-        fields = {
-            "center_x": self.center_x,
-            "center_y": self.center_y,
-            "size_x": self.size_x,
-            "size_y": self.size_y,
-            "fcen": self.fcen,
-        }
-        if kind == "gaussian":
-            fields["df"] = self.df
-
         ok = True
-        for label, widget in fields.items():
+        for field in source_kind(kind).fields:
+            widget = self._prop_widgets[field.field_id]
             result = validate_numeric_expression(widget.text().strip(), allowed)
             _set_invalid(widget, not result.ok)
             if not result.ok:
-                _log_error(self.store, f"{label}: {result.message}", self)
+                _log_error(self.store, f"{field.field_id}: {result.message}", self)
                 ok = False
         return ok
+
+    def _build_props(self, kind: str) -> dict[str, str]:
+        return {
+            field.field_id: self._prop_widgets[field.field_id].text().strip()
+            for field in source_kind(kind).fields
+        }
 
     def _on_add(self) -> None:
         name = self.name_input.text().strip()
@@ -118,15 +126,7 @@ class SourcesTab(QtWidgets.QWidget):
         row = len(sources)
         if not self._validate(name, kind, row):
             return
-        props = {
-            "center_x": self.center_x.text().strip(),
-            "center_y": self.center_y.text().strip(),
-            "size_x": self.size_x.text().strip(),
-            "size_y": self.size_y.text().strip(),
-            "fcen": self.fcen.text().strip(),
-        }
-        if kind == "gaussian":
-            props["df"] = self.df.text().strip()
+        props = self._build_props(kind)
         sources.append(
             SourceItem(
                 name=name,
@@ -171,12 +171,8 @@ class SourcesTab(QtWidgets.QWidget):
         self.name_input.setText(item.name)
         self.kind_input.setCurrentText(item.kind)
         self.component_input.setCurrentText(item.component)
-        self.center_x.setText(item.props.get("center_x", ""))
-        self.center_y.setText(item.props.get("center_y", ""))
-        self.size_x.setText(item.props.get("size_x", ""))
-        self.size_y.setText(item.props.get("size_y", ""))
-        self.fcen.setText(item.props.get("fcen", ""))
-        self.df.setText(item.props.get("df", ""))
+        for field_id, widget in self._prop_widgets.items():
+            widget.setText(item.props.get(field_id, ""))
         self._sync_kind_fields(item.kind)
         _set_invalid(self.name_input, False)
 
@@ -190,20 +186,12 @@ class SourcesTab(QtWidgets.QWidget):
             self.table.setItem(row, 0, QtWidgets.QTableWidgetItem(src.name))
             self.table.setItem(row, 1, QtWidgets.QTableWidgetItem(src.kind))
             self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(src.component))
-            fields: list[tuple[str, str]] = [
-                ("center_x", src.props.get("center_x", "")),
-                ("center_y", src.props.get("center_y", "")),
-                ("size_x", src.props.get("size_x", "")),
-                ("size_y", src.props.get("size_y", "")),
-                ("fcen", src.props.get("fcen", "")),
-            ]
-            if src.kind == "gaussian":
-                fields.append(("df", src.props.get("df", "")))
             message = ""
-            for label, value in fields:
+            for field in source_kind(src.kind).fields:
+                value = src.props.get(field.field_id, "")
                 result = validate_numeric_expression(value, allowed)
                 if not result.ok:
-                    message = f"Source '{src.name}': {label} {result.message}"
+                    message = f"Source '{src.name}': {field.field_id} {result.message}"
                     break
             if message:
                 key = src.name or f"row-{row}"

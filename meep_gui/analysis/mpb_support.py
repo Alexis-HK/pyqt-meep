@@ -3,42 +3,39 @@ from __future__ import annotations
 import csv
 
 from ..model import ProjectState
+from ..primitives import geometry_kind, material_kind
+from ..scene import compile_project_scene
+from ..scene.runtime import eval_required
 
 
 def build_mpb_geometry(state: ProjectState, mp, values: dict[str, float], *, deps) -> list[object]:
+    compiled = compile_project_scene(state, parameter_values=values)
     materials: dict[str, float] = {}
-    for mat in state.materials:
-        if mat.name:
-            materials[mat.name] = deps._eval_required(mat.index_expr, values, f"material '{mat.name}'")
+    for medium in compiled.scene.media:
+        if medium.name:
+            materials[medium.name] = material_kind(medium.kind).resolve_index(
+                medium,
+                compiled.context,
+                eval_required,
+            )
 
     geometry = []
-    for geo in state.geometries:
-        if geo.material not in materials:
-            raise ValueError(f"Geometry '{geo.name}': unknown material '{geo.material}'")
-        medium = mp.Medium(index=materials[geo.material])
-        center_x = deps._eval_required(geo.props.get("center_x", "0"), values, "center_x")
-        center_y = deps._eval_required(geo.props.get("center_y", "0"), values, "center_y")
-        if geo.kind == "block":
-            geometry.append(
-                mp.Block(
-                    size=mp.Vector3(
-                        deps._eval_required(geo.props.get("size_x", "0"), values, "size_x"),
-                        deps._eval_required(geo.props.get("size_y", "0"), values, "size_y"),
-                        mp.inf,
-                    ),
-                    center=mp.Vector3(center_x, center_y),
-                    material=medium,
-                )
+    for obj in compiled.scene.objects:
+        if obj.spatial_material.kind != "uniform":
+            raise ValueError(f"Geometry '{obj.name}': unsupported spatial material kind.")
+        medium_name = obj.spatial_material.medium_name
+        if medium_name not in materials:
+            raise ValueError(f"Geometry '{obj.name}': unknown material '{medium_name}'")
+        medium = mp.Medium(index=materials[medium_name])
+        geometry.append(
+            geometry_kind(obj.geometry.kind).build_mpb_object(
+                obj,
+                medium,
+                mp,
+                compiled.context,
+                eval_required,
             )
-        elif geo.kind == "circle":
-            geometry.append(
-                mp.Cylinder(
-                    radius=deps._eval_required(geo.props.get("radius", "0"), values, "radius"),
-                    height=mp.inf,
-                    center=mp.Vector3(center_x, center_y),
-                    material=medium,
-                )
-            )
+        )
     return geometry
 
 

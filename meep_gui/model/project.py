@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from ..primitives import geometry_kind, source_kind
 from .analysis import (
     AnalysisConfig,
     FrequencyDomainSolverConfig,
@@ -9,7 +10,7 @@ from .analysis import (
     SweepConfig,
     TransmissionSpectrumConfig,
 )
-from .constants import FIELD_COMPONENTS, GEOMETRY_KINDS, RUN_STATUS_VALUES, SOURCE_KINDS
+from .constants import FIELD_COMPONENTS, RUN_STATUS_VALUES
 from .domain import Domain, normalize_domain
 from .objects import FluxMonitorConfig, GeometryItem, Material, Parameter, SourceItem
 from .results import RunRecord
@@ -121,12 +122,10 @@ class ProjectState:
         tx.reference_state.domain = normalize_domain(tx.reference_state.domain)
 
         for item in self.geometries:
-            if item.kind not in GEOMETRY_KINDS:
-                raise ValueError(f"Unsupported geometry kind: {item.kind}")
+            geometry_kind(item.kind)
 
         for item in self.sources:
-            if item.kind not in SOURCE_KINDS:
-                raise ValueError(f"Unsupported source kind: {item.kind}")
+            source_kind(item.kind)
             if item.component not in FIELD_COMPONENTS:
                 raise ValueError(f"Unsupported field component: {item.component}")
 
@@ -135,12 +134,20 @@ class ProjectState:
                 raise ValueError("Flux monitor name is required.")
 
         for item in tx.reference_state.geometries:
-            if item.kind not in GEOMETRY_KINDS:
-                raise ValueError(f"Reference geometry '{item.name}': unsupported kind '{item.kind}'.")
+            try:
+                geometry_kind(item.kind)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Reference geometry '{item.name}': unsupported kind '{item.kind}'."
+                ) from exc
 
         for item in tx.reference_state.sources:
-            if item.kind not in SOURCE_KINDS:
-                raise ValueError(f"Reference source '{item.name}': unsupported kind '{item.kind}'.")
+            try:
+                source_kind(item.kind)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Reference source '{item.name}': unsupported kind '{item.kind}'."
+                ) from exc
             if item.component not in FIELD_COMPONENTS:
                 raise ValueError(
                     f"Reference source '{item.name}': unsupported component '{item.component}'."

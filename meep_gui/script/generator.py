@@ -7,6 +7,7 @@ from ..analysis.preparation import (
 )
 from ..analysis.types import LogFn, ScriptPlan
 from ..model import ProjectState
+from ..primitives import monitor_kind
 from .analyses import emit_flux_exports
 from .common import line
 from .simulation import (
@@ -94,9 +95,7 @@ def _emit_fdtd_setup(
                 lines,
                 "flux_monitors.append(("
                 f"'{mon.name}', "
-                f"sim.add_flux({mon.fcen_expr}, {mon.df_expr}, int({mon.nfreq_expr}), "
-                f"mp.FluxRegion(center=mp.Vector3({mon.center_x_expr}, {mon.center_y_expr}, 0), "
-                f"size=mp.Vector3({mon.size_x_expr}, {mon.size_y_expr}, 0)))"
+                f"{monitor_kind(mon.kind).script_add_flux_expr('sim', mon)}"
                 "))",
             )
         line(lines)

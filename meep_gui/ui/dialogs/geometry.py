@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from PyQt5 import QtWidgets
 
-from ...model import GEOMETRY_KINDS, GeometryItem
+from ...model import GeometryItem
+from ...primitives import GEOMETRY_REGISTRY, geometry_kind
 from ...store import ProjectStore
 from ...validation import validate_name, validate_numeric_expression
 from ..common import _log_error, _set_invalid
@@ -19,7 +20,7 @@ class GeometryEditDialog(QtWidgets.QDialog):
 
         self.name_input = QtWidgets.QLineEdit(item.name)
         self.kind_input = QtWidgets.QComboBox()
-        self.kind_input.addItems(list(GEOMETRY_KINDS))
+        self.kind_input.addItems(list(GEOMETRY_REGISTRY))
         self.kind_input.setCurrentText(item.kind)
         self.material_input = QtWidgets.QComboBox()
         mats = [mat.name for mat in store.state.materials]
@@ -33,6 +34,13 @@ class GeometryEditDialog(QtWidgets.QDialog):
         self.size_x = QtWidgets.QLineEdit(item.props.get("size_x", ""))
         self.size_y = QtWidgets.QLineEdit(item.props.get("size_y", ""))
         self.radius = QtWidgets.QLineEdit(item.props.get("radius", ""))
+        self._prop_widgets = {
+            "center_x": self.center_x,
+            "center_y": self.center_y,
+            "size_x": self.size_x,
+            "size_y": self.size_y,
+            "radius": self.radius,
+        }
 
         form = QtWidgets.QFormLayout()
         form.addRow("Name", self.name_input)
@@ -65,10 +73,9 @@ class GeometryEditDialog(QtWidgets.QDialog):
         return self._result
 
     def _sync_kind_fields(self, kind: str) -> None:
-        circle = kind == "circle"
-        self.radius.setEnabled(circle)
-        self.size_x.setEnabled(not circle)
-        self.size_y.setEnabled(not circle)
+        enabled = {field.field_id for field in geometry_kind(kind).fields}
+        for field_id, widget in self._prop_widgets.items():
+            widget.setEnabled(field_id in enabled)
 
     def _on_save(self) -> None:
         name = self.name_input.text().strip()
@@ -86,27 +93,17 @@ class GeometryEditDialog(QtWidgets.QDialog):
             return
         _set_invalid(self.material_input, False)
 
-        fields = {"center_x": self.center_x, "center_y": self.center_y}
-        if kind == "circle":
-            fields["radius"] = self.radius
-        else:
-            fields["size_x"] = self.size_x
-            fields["size_y"] = self.size_y
-        for label, widget in fields.items():
+        for field in geometry_kind(kind).fields:
+            widget = self._prop_widgets[field.field_id]
             result = validate_numeric_expression(widget.text().strip(), parameter_names(self.store))
             _set_invalid(widget, not result.ok)
             if not result.ok:
-                _log_error(self.store, f"{label}: {result.message}", self)
+                _log_error(self.store, f"{field.field_id}: {result.message}", self)
                 return
 
         props = {
-            "center_x": self.center_x.text().strip(),
-            "center_y": self.center_y.text().strip(),
+            field.field_id: self._prop_widgets[field.field_id].text().strip()
+            for field in geometry_kind(kind).fields
         }
-        if kind == "circle":
-            props["radius"] = self.radius.text().strip()
-        else:
-            props["size_x"] = self.size_x.text().strip()
-            props["size_y"] = self.size_y.text().strip()
         self._result = GeometryItem(name=name, kind=kind, material=material, props=props)
         self.accept()

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from PyQt5 import QtWidgets
 
-from ...model import FIELD_COMPONENTS, SOURCE_KINDS, SourceItem
+from ...model import FIELD_COMPONENTS, SourceItem
+from ...primitives import SOURCE_REGISTRY, source_kind
 from ...store import ProjectStore
 from ...validation import validate_name, validate_numeric_expression
 from ..common import _log_error, _set_invalid
@@ -19,7 +20,7 @@ class SourceEditDialog(QtWidgets.QDialog):
 
         self.name_input = QtWidgets.QLineEdit(item.name)
         self.kind_input = QtWidgets.QComboBox()
-        self.kind_input.addItems(list(SOURCE_KINDS))
+        self.kind_input.addItems(list(SOURCE_REGISTRY))
         self.kind_input.setCurrentText(item.kind)
         self.component_input = QtWidgets.QComboBox()
         self.component_input.addItems(list(FIELD_COMPONENTS))
@@ -30,6 +31,14 @@ class SourceEditDialog(QtWidgets.QDialog):
         self.size_y = QtWidgets.QLineEdit(item.props.get("size_y", ""))
         self.fcen = QtWidgets.QLineEdit(item.props.get("fcen", ""))
         self.df = QtWidgets.QLineEdit(item.props.get("df", ""))
+        self._prop_widgets = {
+            "center_x": self.center_x,
+            "center_y": self.center_y,
+            "size_x": self.size_x,
+            "size_y": self.size_y,
+            "fcen": self.fcen,
+            "df": self.df,
+        }
 
         form = QtWidgets.QFormLayout()
         form.addRow("Name", self.name_input)
@@ -63,7 +72,9 @@ class SourceEditDialog(QtWidgets.QDialog):
         return self._result
 
     def _sync_kind_fields(self, kind: str) -> None:
-        self.df.setEnabled(kind == "gaussian")
+        enabled = {field.field_id for field in source_kind(kind).fields}
+        for field_id, widget in self._prop_widgets.items():
+            widget.setEnabled(field_id in enabled)
 
     def _on_save(self) -> None:
         name = self.name_input.text().strip()
@@ -75,31 +86,18 @@ class SourceEditDialog(QtWidgets.QDialog):
             _log_error(self.store, name_result.message, self)
             return
 
-        fields = {
-            "center_x": self.center_x,
-            "center_y": self.center_y,
-            "size_x": self.size_x,
-            "size_y": self.size_y,
-            "fcen": self.fcen,
-        }
-        if kind == "gaussian":
-            fields["df"] = self.df
-        for label, widget in fields.items():
+        for field in source_kind(kind).fields:
+            widget = self._prop_widgets[field.field_id]
             result = validate_numeric_expression(widget.text().strip(), parameter_names(self.store))
             _set_invalid(widget, not result.ok)
             if not result.ok:
-                _log_error(self.store, f"{label}: {result.message}", self)
+                _log_error(self.store, f"{field.field_id}: {result.message}", self)
                 return
 
         props = {
-            "center_x": self.center_x.text().strip(),
-            "center_y": self.center_y.text().strip(),
-            "size_x": self.size_x.text().strip(),
-            "size_y": self.size_y.text().strip(),
-            "fcen": self.fcen.text().strip(),
+            field.field_id: self._prop_widgets[field.field_id].text().strip()
+            for field in source_kind(kind).fields
         }
-        if kind == "gaussian":
-            props["df"] = self.df.text().strip()
         self._result = SourceItem(
             name=name,
             kind=kind,

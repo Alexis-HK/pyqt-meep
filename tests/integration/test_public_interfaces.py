@@ -10,6 +10,8 @@ def test_supported_headless_public_modules_import_and_expose_expected_names() ->
     import meep_gui
     from meep_gui import analysis, model, persistence, scene, script, validation
     from meep_gui.analysis import recipes
+    import meep_gui.primitives as primitives
+    import meep_gui.results as results
 
     assert callable(meep_gui.main)
     assert hasattr(model, "ProjectState")
@@ -19,6 +21,8 @@ def test_supported_headless_public_modules_import_and_expose_expected_names() ->
     assert callable(persistence.state_from_dict)
     assert callable(scene.compile_project_scene)
     assert callable(recipes.get_recipe)
+    assert callable(primitives.geometry_kind)
+    assert callable(results.typed_artifacts_from_run_record)
     assert callable(validation.evaluate_parameters)
 
 

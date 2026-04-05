@@ -1,23 +1,22 @@
 from __future__ import annotations
 
-from ..model import FIELD_COMPONENTS, GEOMETRY_KINDS, SOURCE_KINDS, ProjectState, normalize_domain
+from ..model import FIELD_COMPONENTS, ProjectState, normalize_domain
+from ..primitives import (
+    DEFAULT_MATERIAL_KIND,
+    DEFAULT_MONITOR_KIND,
+    geometry_kind,
+    material_kind,
+    monitor_kind,
+    source_kind,
+)
 from ..validation import evaluate_parameters
 from .types import (
-    BlockGeometrySpec,
-    CircleGeometrySpec,
     CompilationContext,
     CompiledScene,
     DomainSpec,
-    GeometrySpec,
-    MediumSpec,
-    MonitorSpec,
     ParameterSpec,
-    SceneObject,
     SceneSpec,
-    SourceSpec,
-    SpatialMaterialSpec,
     SymmetrySpec,
-    TransformSpec,
     TransmissionSceneBundle,
 )
 
@@ -107,84 +106,26 @@ def _compile_scene_spec(
         if getattr(item, "name", "")
     )
     scene_media = tuple(
-        MediumSpec(
-            name=item.name,
-            kind="constant",
-            constant_index_expr=item.index_expr,
-        )
+        material_kind(DEFAULT_MATERIAL_KIND).compile_scene_medium(item)
         for item in materials
         if getattr(item, "name", "")
     )
 
-    scene_objects: list[SceneObject] = []
+    scene_objects = []
     for item in geometries:
-        if item.kind not in GEOMETRY_KINDS:
-            raise ValueError(f"Unsupported geometry kind: {item.kind}")
-        geometry = GeometrySpec(
-            kind=item.kind,
-            block=(
-                BlockGeometrySpec(
-                    size_x_expr=item.props.get("size_x", "0"),
-                    size_y_expr=item.props.get("size_y", "0"),
-                )
-                if item.kind == "block"
-                else None
-            ),
-            circle=(
-                CircleGeometrySpec(radius_expr=item.props.get("radius", "0"))
-                if item.kind == "circle"
-                else None
-            ),
-        )
-        scene_objects.append(
-            SceneObject(
-                name=item.name,
-                geometry=geometry,
-                spatial_material=SpatialMaterialSpec(kind="uniform", medium_name=item.material),
-                transform=TransformSpec(
-                    center_x_expr=item.props.get("center_x", "0"),
-                    center_y_expr=item.props.get("center_y", "0"),
-                ),
-            )
-        )
+        scene_objects.append(geometry_kind(item.kind).compile_scene_object(item))
 
-    scene_sources: list[SourceSpec] = []
+    scene_sources = []
     for item in sources:
-        if item.kind not in SOURCE_KINDS:
-            raise ValueError(f"Unsupported source kind: {item.kind}")
         if item.component not in FIELD_COMPONENTS:
             raise ValueError(f"Unsupported field component: {item.component}")
-        scene_sources.append(
-            SourceSpec(
-                name=item.name,
-                kind=item.kind,
-                component=item.component,
-                center_x_expr=item.props.get("center_x", "0"),
-                center_y_expr=item.props.get("center_y", "0"),
-                size_x_expr=item.props.get("size_x", "0"),
-                size_y_expr=item.props.get("size_y", "0"),
-                frequency_expr=item.props.get("fcen", "0.15"),
-                bandwidth_expr=item.props.get("df", "0.1"),
-            )
-        )
+        scene_sources.append(source_kind(item.kind).compile_scene_source(item))
 
-    scene_monitors_list: list[MonitorSpec] = []
+    scene_monitors_list = []
     for item in monitors:
         if not getattr(item, "name", ""):
             raise ValueError("Flux monitor name is required.")
-        scene_monitors_list.append(
-            MonitorSpec(
-                name=item.name,
-                kind="flux",
-                center_x_expr=item.center_x,
-                center_y_expr=item.center_y,
-                size_x_expr=item.size_x,
-                size_y_expr=item.size_y,
-                fcen_expr=item.fcen,
-                df_expr=item.df,
-                nfreq_expr=item.nfreq,
-            )
-        )
+        scene_monitors_list.append(monitor_kind(DEFAULT_MONITOR_KIND).compile_scene_monitor(item))
 
     scene_symmetries = tuple(
         SymmetrySpec(

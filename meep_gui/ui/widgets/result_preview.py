@@ -4,6 +4,8 @@ import os
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
+from ...results import ArtifactDisplayEntry
+
 
 class ResultPreviewWidget(QtWidgets.QWidget):
     def __init__(self, parent=None) -> None:
@@ -62,10 +64,9 @@ class ResultPreviewWidget(QtWidgets.QWidget):
         self.text_preview.setReadOnly(True)
         self.preview_stack.addWidget(self.text_preview)
 
-    def show_artifact(self, artifact: dict[str, str]) -> None:
-        kind = artifact.get("kind", "")
-        path = artifact.get("path", "")
-        if kind == "animation_mp4" and self._media_available and path and os.path.exists(path):
+    def show_artifact(self, artifact: ArtifactDisplayEntry) -> None:
+        path = artifact.path
+        if artifact.preview_kind == "media" and self._media_available and path and os.path.exists(path):
             media = self._media.QMediaContent(QtCore.QUrl.fromLocalFile(path))
             self.player.setMedia(media)
             self.player.pause()
@@ -73,7 +74,7 @@ class ResultPreviewWidget(QtWidgets.QWidget):
                 self.play_button.setText("Play")
             self.preview_stack.setCurrentIndex(0)
             return
-        if path and path.lower().endswith(".png") and os.path.exists(path):
+        if artifact.preview_kind == "image" and path and os.path.exists(path):
             pix = QtGui.QPixmap(path)
             if pix.isNull():
                 self.show_text("Could not load image.")
@@ -88,6 +89,9 @@ class ResultPreviewWidget(QtWidgets.QWidget):
             )
             self.preview_stack.setCurrentIndex(1)
             return
+        if artifact.text:
+            self.show_text(artifact.text)
+            return
         if path and os.path.exists(path):
             try:
                 with open(path, "r", encoding="utf-8") as handle:
@@ -95,9 +99,6 @@ class ResultPreviewWidget(QtWidgets.QWidget):
             except Exception as exc:
                 text = f"Failed to read file: {exc}"
             self.show_text(text)
-            return
-        if kind == "harminv_text" and artifact.get("text", ""):
-            self.show_text(artifact["text"])
             return
         self.show_text("No preview available.")
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from PyQt5 import QtWidgets
 
 from ...model import FluxMonitorConfig
+from ...primitives import DEFAULT_MONITOR_KIND, monitor_kind
 from ...store import ProjectStore
 from ...validation import validate_name, validate_numeric_expression
 from ..common import _log_error, _set_invalid
@@ -25,16 +26,21 @@ class FluxMonitorEditDialog(QtWidgets.QDialog):
         self.fcen = QtWidgets.QLineEdit(monitor.fcen)
         self.df = QtWidgets.QLineEdit(monitor.df)
         self.nfreq = QtWidgets.QLineEdit(monitor.nfreq)
+        self._monitor_spec = monitor_kind(DEFAULT_MONITOR_KIND)
+        self._field_widgets = {
+            "center_x": self.center_x,
+            "center_y": self.center_y,
+            "size_x": self.size_x,
+            "size_y": self.size_y,
+            "fcen": self.fcen,
+            "df": self.df,
+            "nfreq": self.nfreq,
+        }
 
         form = QtWidgets.QFormLayout()
         form.addRow("Name", self.name_input)
-        form.addRow("Center X", self.center_x)
-        form.addRow("Center Y", self.center_y)
-        form.addRow("Size X", self.size_x)
-        form.addRow("Size Y", self.size_y)
-        form.addRow("fcen", self.fcen)
-        form.addRow("df", self.df)
-        form.addRow("nfreq", self.nfreq)
+        for field in self._monitor_spec.fields:
+            form.addRow(field.label, self._field_widgets[field.field_id])
 
         self.save_button = QtWidgets.QPushButton("Save")
         self.cancel_button = QtWidgets.QPushButton("Cancel")
@@ -70,29 +76,17 @@ class FluxMonitorEditDialog(QtWidgets.QDialog):
             _log_error(self.store, f"Name '{name}' is already in use.", self)
             return
 
-        for widget, label in (
-            (self.center_x, "Center X"),
-            (self.center_y, "Center Y"),
-            (self.size_x, "Size X"),
-            (self.size_y, "Size Y"),
-            (self.fcen, "fcen"),
-            (self.df, "df"),
-            (self.nfreq, "nfreq"),
-        ):
+        for field in self._monitor_spec.fields:
+            widget = self._field_widgets[field.field_id]
             result = validate_numeric_expression(widget.text().strip(), parameter_names(self.store))
             _set_invalid(widget, not result.ok)
             if not result.ok:
-                _log_error(self.store, f"{label}: {result.message}", self)
+                _log_error(self.store, f"{field.label}: {result.message}", self)
                 return
 
-        self._result = FluxMonitorConfig(
-            name=name,
-            center_x=self.center_x.text().strip(),
-            center_y=self.center_y.text().strip(),
-            size_x=self.size_x.text().strip(),
-            size_y=self.size_y.text().strip(),
-            fcen=self.fcen.text().strip(),
-            df=self.df.text().strip(),
-            nfreq=self.nfreq.text().strip(),
-        )
+        props = {
+            field.field_id: self._field_widgets[field.field_id].text().strip()
+            for field in self._monitor_spec.fields
+        }
+        self._result = FluxMonitorConfig(name=name, **props)
         self.accept()

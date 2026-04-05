@@ -1,15 +1,17 @@
+from ..primitives import GEOMETRY_REGISTRY, SOURCE_REGISTRY
+
 FIELD_COMPONENTS = ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")
 
-GEOMETRY_KINDS = ("circle", "block")
+GEOMETRY_KINDS = tuple(GEOMETRY_REGISTRY)
 GEOMETRY_FIELDS = {
-    "circle": ("radius", "center_x", "center_y"),
-    "block": ("size_x", "size_y", "center_x", "center_y"),
+    kind: tuple(field.field_id for field in spec.fields)
+    for kind, spec in GEOMETRY_REGISTRY.items()
 }
 
-SOURCE_KINDS = ("continuous", "gaussian")
+SOURCE_KINDS = tuple(SOURCE_REGISTRY)
 SOURCE_FIELDS = {
-    "continuous": ("center_x", "center_y", "size_x", "size_y", "fcen"),
-    "gaussian": ("center_x", "center_y", "size_x", "size_y", "fcen", "df"),
+    kind: tuple(field.field_id for field in spec.fields)
+    for kind, spec in SOURCE_REGISTRY.items()
 }
 
 PML_MODES = ("x", "y", "both", "none")
