@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 
 from PyQt5 import QtCore, QtWidgets
@@ -55,13 +56,7 @@ class ResultBrowserWidget(QtWidgets.QWidget):
 
         self.run_list.clear()
         for run in self._store.state.results:
-            prefix = run.meta.get("sweep_label", "").strip()
-            label = f"{run.analysis_kind} [{run.status}] {run.created_at or run.run_id}"
-            if prefix:
-                label = f"{prefix} | {label}"
-            if run.status == "canceled":
-                label += " (canceled)"
-            item = QtWidgets.QListWidgetItem(label)
+            item = QtWidgets.QListWidgetItem(self._run_list_label(run))
             item.setData(QtCore.Qt.UserRole, run.run_id)
             self.run_list.addItem(item)
 
@@ -114,6 +109,35 @@ class ResultBrowserWidget(QtWidgets.QWidget):
         allowed = "-_." if allow_dot else "-_"
         sanitized = "".join(ch if ch.isalnum() or ch in allowed else "_" for ch in value.strip())
         return sanitized or default
+
+    def _run_list_label(self, run: RunRecord) -> str:
+        prefix = run.meta.get("sweep_label", "").strip()
+        label = f"{run.analysis_kind} [{run.status}] {run.created_at or run.run_id}"
+        if prefix:
+            label = f"{prefix} | {label}"
+        if run.status == "canceled":
+            label += " (canceled)"
+        return label
+
+    def _sanitize_run_list_dir_name(self, label: str) -> str:
+        text = label.strip()
+        replacements = {
+            "|": "-",
+            ":": "-",
+            "/": "_",
+            "\\": "_",
+            "<": "_",
+            ">": "_",
+            '"': "_",
+            "?": "_",
+            "*": "_",
+        }
+        for source, target in replacements.items():
+            text = text.replace(source, target)
+        text = re.sub(r"[\x00-\x1f]", "_", text)
+        text = re.sub(r"\s+", " ", text).strip()
+        text = text.rstrip(" .")
+        return text or "run"
 
     def _unique_path(self, path: str) -> str:
         stem, ext = os.path.splitext(path)
@@ -240,7 +264,8 @@ class ResultBrowserWidget(QtWidgets.QWidget):
         if not parent_dir:
             return
 
-        out_dir = self._unique_path(os.path.join(parent_dir, self._run_export_dir_name(run)))
+        run_dir_name = self._sanitize_run_list_dir_name(self._run_list_label(run))
+        out_dir = self._unique_path(os.path.join(parent_dir, run_dir_name))
         os.makedirs(out_dir, exist_ok=True)
         copied, skipped = self._export_artifacts_to_dir(self._display_artifacts, out_dir)
 
@@ -269,7 +294,8 @@ class ResultBrowserWidget(QtWidgets.QWidget):
         total_exported = 0
         total_skipped = 0
         for run in completed_runs:
-            run_dir = self._unique_path(os.path.join(bundle_dir, self._run_export_dir_name(run)))
+            run_dir_name = self._sanitize_run_list_dir_name(self._run_list_label(run))
+            run_dir = self._unique_path(os.path.join(bundle_dir, run_dir_name))
             os.makedirs(run_dir, exist_ok=True)
             artifacts = list(display_entries_from_run_record(run))
             exported, skipped = self._export_artifacts_to_dir(artifacts, run_dir)

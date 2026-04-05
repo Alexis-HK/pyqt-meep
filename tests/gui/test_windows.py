@@ -109,6 +109,7 @@ def test_output_window_export_all_copies_multiple_artifacts_to_folder(qtbot, mon
 
     created_dirs = [path for path in export_parent.iterdir() if path.is_dir()]
     assert len(created_dirs) == 1
+    assert created_dirs[0].name == "transmission_spectrum [completed] 2026-02-06T10-00-00"
     exported_names = {path.name for path in created_dirs[0].iterdir()}
     assert "a.csv" in exported_names
     assert "b.png" in exported_names
@@ -191,6 +192,7 @@ def test_output_window_export_all_runs_exports_completed_run_bundle(
                 status="completed",
                 created_at="2026-02-06T10:01:00",
                 message="done",
+                meta={"sweep_label": "a=2"},
                 artifacts=[
                     ResultArtifact(kind="plot_png", label="missing.png", path=str(missing_png)),
                 ],
@@ -239,14 +241,20 @@ def test_output_window_export_all_runs_exports_completed_run_bundle(
     assert bundle_dir.is_dir()
 
     run_dirs = {path.name: path for path in bundle_dir.iterdir() if path.is_dir()}
-    assert set(run_dirs) == {"transmission_spectrum_r1", "harminv_r2"}
+    assert set(run_dirs) == {
+        "transmission_spectrum [completed] 2026-02-06T10-00-00",
+        "a=2 - harminv [completed] 2026-02-06T10-01-00",
+    }
 
-    exported_names = {path.name for path in run_dirs["transmission_spectrum_r1"].iterdir()}
+    exported_names = {
+        path.name
+        for path in run_dirs["transmission_spectrum [completed] 2026-02-06T10-00-00"].iterdir()
+    }
     assert exported_names == {"bundle.csv", "notes.txt"}
-    assert (run_dirs["transmission_spectrum_r1"] / "notes.txt").read_text(encoding="utf-8") == (
-        "line one\nline two\n"
-    )
-    assert list(run_dirs["harminv_r2"].iterdir()) == []
+    assert (
+        run_dirs["transmission_spectrum [completed] 2026-02-06T10-00-00"] / "notes.txt"
+    ).read_text(encoding="utf-8") == ("line one\nline two\n")
+    assert list(run_dirs["a=2 - harminv [completed] 2026-02-06T10-01-00"].iterdir()) == []
 
     assert any(
         "Exported 2 completed runs (2 artifacts)" in message
@@ -292,7 +300,7 @@ def test_output_window_export_all_runs_uses_unique_bundle_name_on_collision(
     assert created_bundle.is_dir()
     run_dirs = [path for path in created_bundle.iterdir() if path.is_dir()]
     assert len(run_dirs) == 1
-    assert run_dirs[0].name == "harminv_r1"
+    assert run_dirs[0].name == "harminv [completed] 2026-02-06T10-00-00"
     assert (run_dirs[0] / "summary.txt").read_text(encoding="utf-8") == "hello\n"
 
 
