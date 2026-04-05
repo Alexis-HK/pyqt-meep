@@ -9,8 +9,6 @@ def emit_mpb(lines: list[str], state) -> None:
     if state.domain.symmetry_enabled and state.domain.symmetries:
         line(lines, "# Note: domain symmetries are FDTD-only and are not applied to MPB.")
     for text in (
-        "out_dir = os.path.join(script_dir, 'mpb_outputs')",
-        "os.makedirs(out_dir, exist_ok=True)",
         "geometry_lattice = mp.Lattice("
         f"size=mp.Vector3({cfg.lattice_x}, {cfg.lattice_y}, 0), "
         f"basis1=mp.Vector3({cfg.basis1_x}, {cfg.basis1_y}, 0), "

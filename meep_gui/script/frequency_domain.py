@@ -10,8 +10,6 @@ def emit_frequency_domain(lines: list[str], state) -> None:
     output_name = os.path.basename(cfg.output_name.strip() or "frequency_domain_field.png")
 
     line(lines, "# Frequency-domain solver")
-    line(lines, "out_dir = os.path.join(script_dir, 'frequency_domain_outputs')")
-    line(lines, "os.makedirs(out_dir, exist_ok=True)")
     if not state.sources:
         line(
             lines,

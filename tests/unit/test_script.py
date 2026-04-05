@@ -10,8 +10,11 @@ from meep_gui.model import (
     KPoint,
     MeepKPointsConfig,
     MpbModeSolverConfig,
+    Parameter,
     ProjectState,
     SourceItem,
+    SweepConfig,
+    SweepParameter,
     SymmetryItem,
     TransmissionDomainState,
     TransmissionSpectrumConfig,
@@ -42,6 +45,20 @@ def test_harminv_script_writes_outputs_to_subfolder() -> None:
     assert "anim_out = os.path.join(out_dir, \"harminv_animation.mp4\")" in code
     assert "harminv_out = os.path.join(out_dir, \"harminv.txt\")" in code
     assert "with open(harminv_out, 'w', encoding='utf-8') as f:" in code
+
+
+def test_field_animation_script_uses_out_dir_and_flux_exports() -> None:
+    state = ProjectState(
+        flux_monitors=[FluxMonitorConfig(name="tx")],
+        analysis=AnalysisConfig(kind="field_animation"),
+    )
+
+    code = generate_script(state)
+
+    assert "anim_out = os.path.join(out_dir, \"animation.mp4\")" in code
+    assert "anim_out = os.path.join(script_dir, \"animation.mp4\")" not in code
+    assert "csv_path = os.path.join(out_dir, f'{monitor_name}_flux.csv')" in code
+    assert "csv_path = os.path.join(script_dir, f'{monitor_name}_flux.csv')" not in code
 
 
 def test_mpb_script_includes_te_tm_field_and_tutorial_epsilon_plot() -> None:
@@ -365,3 +382,59 @@ def test_generate_script_rejects_non_literal_symmetry_phase() -> None:
         assert "symmetry 'mx' phase" in str(exc)
     else:
         raise AssertionError("Expected generate_script() to reject non-literal symmetry phase.")
+
+
+def test_sweep_enabled_script_emits_runner_and_folder_layout() -> None:
+    state = ProjectState(
+        analysis=AnalysisConfig(kind="harminv"),
+        parameters=[Parameter(name="a", expr="1"), Parameter(name="b", expr="10")],
+        sweep=SweepConfig(
+            enabled=True,
+            params=[
+                SweepParameter(name="a", start="1", stop="3", steps="1"),
+                SweepParameter(name="b", start="5", stop="7", steps="1"),
+            ],
+        ),
+    )
+
+    code = generate_script(state)
+
+    assert "Sweep configured in GUI; run manually in Python if needed." not in code
+    assert "def run_analysis(out_dir, overrides=None):" in code
+    assert "analysis_kind = 'harminv'" in code
+    assert "sweep_root = _unique_dir(os.path.join(script_dir, f\"{analysis_kind}_sweeps\"))" in code
+    assert "row_dir = _unique_dir(os.path.join(sweep_root, _safe_dir_name(f\"{analysis_kind}_{name}\")))" in code
+    assert "run_dir = _unique_dir(os.path.join(row_dir, _safe_dir_name(label)))" in code
+    assert "run_analysis(run_dir, overrides={name: value})" in code
+    assert "print(f\"Sweep {queue_index}/{queue_total}: {label} ({point_index}/{point_total} for {name})\")" in code
+    assert "parameter_values = _build_parameter_values(overrides)" in code
+
+
+def test_sweep_enabled_script_emits_app_like_value_expansion_rules() -> None:
+    state = ProjectState(
+        analysis=AnalysisConfig(kind="frequency_domain_solver"),
+        parameters=[Parameter(name="a", expr="1")],
+        sources=[
+            SourceItem(
+                name="cw_src",
+                kind="continuous",
+                component="Ez",
+                props={"fcen": "0.2"},
+            )
+        ],
+        sweep=SweepConfig(
+            enabled=True,
+            params=[SweepParameter(name="a", start="1", stop="2", steps="0.5")],
+        ),
+    )
+
+    code = generate_script(state)
+
+    assert "def _expand_sweep_values(name, start_expr, stop_expr, step_expr, base_values):" in code
+    assert "if abs(start - stop) <= eps:" in code
+    assert "if abs(step_size) <= eps:" in code
+    assert "if stop > start and step_size <= 0:" in code
+    assert "if stop < start and step_size >= 0:" in code
+    assert "raise ValueError(f\"Sweep parameter '{name}' produced no sweep points.\")" in code
+    assert "print(f\"Sweep stopped after {label} failed.\")" in code
+    assert "print(f\"Sweep completed. {completed} runs saved under {sweep_root}\")" in code

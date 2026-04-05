@@ -10,7 +10,7 @@ def emit_field_animation(lines: list[str], cfg) -> None:
     line(lines, "# Field animation")
     line(lines, f"animate = mp.Animate2D(fields=mp.{cfg.component}, realtime=False)")
     line(lines, f"sim.run(mp.at_every({cfg.interval}, animate), until={cfg.duration})")
-    line(lines, f"anim_out = os.path.join(script_dir, \"{output_name}\")")
+    line(lines, f"anim_out = os.path.join(out_dir, \"{output_name}\")")
     line(lines, f"animate.to_mp4({cfg.fps}, anim_out)")
 
 
@@ -19,8 +19,6 @@ def emit_harminv(lines: list[str], cfg) -> None:
     log_name = os.path.basename(cfg.harminv_log_path.strip() or "harminv.txt")
     for text in (
         "# Harminv",
-        "out_dir = os.path.join(script_dir, 'harminv_outputs')",
-        "os.makedirs(out_dir, exist_ok=True)",
         "harminv = mp.Harminv("
         f"mp.{cfg.component}, mp.Vector3({cfg.point_x}, {cfg.point_y}), "
         f"{cfg.fcen}, {cfg.df})",
@@ -70,7 +68,7 @@ def emit_flux_exports(lines: list[str]) -> None:
         "for monitor_name, monitor_obj in flux_monitors:",
         "    freqs = mp.get_flux_freqs(monitor_obj)",
         "    vals = mp.get_fluxes(monitor_obj)",
-        "    csv_path = os.path.join(script_dir, f'{monitor_name}_flux.csv')",
+        "    csv_path = os.path.join(out_dir, f'{monitor_name}_flux.csv')",
         "    with open(csv_path, 'w', newline='', encoding='utf-8') as f:",
         "        writer = csv.writer(f)",
         "        writer.writerow(['frequency', 'flux'])",

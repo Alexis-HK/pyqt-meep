@@ -10,8 +10,6 @@ def emit_meep_k_points(lines: list[str], state) -> None:
 
     line(lines, "# Meep k points")
     for text in (
-        "out_dir = os.path.join(script_dir, 'meep_k_points_outputs')",
-        "os.makedirs(out_dir, exist_ok=True)",
         "input_k_points = [",
     ):
         line(lines, text)

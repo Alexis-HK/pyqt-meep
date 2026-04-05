@@ -19,8 +19,6 @@ def emit_transmission(lines: list[str], state, scattering_scene, reference_scene
         (cfg.reuse_reference_csv_name or "transmission_spectrum.csv").strip()
     ) or "transmission_spectrum.csv"
     line(lines, "# Transmission spectrum (two runs)")
-    line(lines, "out_dir = os.path.join(script_dir, 'transmission_outputs')")
-    line(lines, "os.makedirs(out_dir, exist_ok=True)")
     line(lines, f"reference_incident_csv = '{reuse_csv_name}'")
     line(lines, f"incident_monitor_name = '{cfg.incident_monitor}'")
     line(lines, f"trans_monitor_name = '{cfg.transmission_monitor}'")
