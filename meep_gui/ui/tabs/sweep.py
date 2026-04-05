@@ -6,6 +6,7 @@ from ...model import SweepConfig, SweepParameter
 from ...store import ProjectStore
 from ...validation import validate_numeric_expression
 from ..common import _log_error, _set_invalid
+from ..dialogs import SweepEditDialog
 from ..scope import parameter_names
 
 
@@ -148,9 +149,13 @@ class SweepTab(QtWidgets.QWidget):
 
     def _on_update(self) -> None:
         row = self._current_row()
-        if row < 0 or not self._validate_param(row):
+        if row < 0 or row >= len(self.store.state.sweep.params):
             return
-        param = self._build_param()
+        item = self.store.state.sweep.params[row]
+        dialog = SweepEditDialog(self.store, item, row, self)
+        if dialog.exec_() != QtWidgets.QDialog.Accepted or dialog.result is None:
+            return
+        param = dialog.result
         params = list(self.store.state.sweep.params)
         params[row] = param
         self._pending_select_name = param.name

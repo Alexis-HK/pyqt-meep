@@ -43,6 +43,7 @@ import meep_gui.ui.tabs.domain as domain_tab_module
 from meep_gui.ui.tabs.flux_monitors import FluxMonitorsTab
 from meep_gui.ui.tabs.parameters import ParametersTab
 from meep_gui.ui.tabs.sweep import SweepTab
+import meep_gui.ui.tabs.sweep as sweep_tab_module
 from meep_gui.ui.windows import OutputWindow
 
 
@@ -939,11 +940,17 @@ def test_sweep_tab_preserves_selection_on_update_and_remove(qtbot) -> None:
     assert tab.param_name.currentText() == "a"
     assert tab.start.text() == "1"
 
-    tab.param_name.setCurrentText("c")
-    tab.start.setText("10")
-    tab.stop.setText("12")
-    tab.steps.setText("1")
+    class _UpdateDialog:
+        def __init__(self, *_args, **_kwargs) -> None:
+            self.result = SweepParameter(name="c", start="10", stop="12", steps="1")
+
+        def exec_(self) -> int:
+            return QtWidgets.QDialog.Accepted
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(sweep_tab_module, "SweepEditDialog", _UpdateDialog)
     qtbot.mouseClick(tab.update_button, QtCore.Qt.LeftButton)
+    monkeypatch.undo()
 
     qtbot.waitUntil(lambda: store.state.sweep.params[0].name == "c", timeout=3000)
     assert tab._current_row() == 0

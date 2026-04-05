@@ -4,6 +4,7 @@ from .kpoint import KPointEditDialog
 from .material import MaterialEditDialog
 from .parameter import ParameterEditDialog
 from .source import SourceEditDialog
+from .sweep import SweepEditDialog
 from .symmetry import SymmetryEditDialog
 
 __all__ = [
@@ -13,5 +14,6 @@ __all__ = [
     "MaterialEditDialog",
     "ParameterEditDialog",
     "SourceEditDialog",
+    "SweepEditDialog",
     "SymmetryEditDialog",
 ]
