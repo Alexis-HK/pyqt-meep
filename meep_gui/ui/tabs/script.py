@@ -58,7 +58,7 @@ class ScriptTab(QtWidgets.QWidget):
 
     def _refresh_script(self) -> None:
         try:
-            code = generate_script(self.store.state)
+            code = generate_script(self.store.state, log=self.store.log_message)
         except Exception as exc:
             code = f"# Error generating script: {exc}\\n"
         self.script_box.setPlainText(code)
@@ -69,7 +69,7 @@ class ScriptTab(QtWidgets.QWidget):
         os.makedirs(directory, exist_ok=True)
         out_path = os.path.join(directory, filename)
         try:
-            code = generate_script(self.store.state)
+            code = generate_script(self.store.state, log=self.store.log_message)
             with open(out_path, "w", encoding="utf-8") as f:
                 f.write(code)
             self.store.log_message(f"Script exported to {out_path}")

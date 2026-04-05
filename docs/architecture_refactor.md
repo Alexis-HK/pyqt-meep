@@ -15,7 +15,8 @@
 ## Target flow
 - `ProjectState` remains the editor-facing state for now.
 - A typed internal Scene IR becomes the canonical scene definition for current features.
-- Later runtime and script execution will resolve analyses through a small recipe registry instead of `if/elif` dispatch.
+- Analysis execution and script export resolve the active analysis kind through a small recipe registry instead of `if/elif` dispatch.
+- Validation combines recipe rules with a capability matrix so runtime and script preparation agree on what is supported, ignored, or forbidden.
 - Lowering flows become:
   - `ProjectState -> SceneSpec`
   - `SceneSpec -> runtime compile inputs`
@@ -47,11 +48,17 @@
 - Phase 1 is complete:
   - `meep_gui.scene` is the canonical scene IR for current features
   - runtime, preview, and script export lower through the Scene IR
-- Phase 2 through Phase 5 remain deferred.
+- Phase 2 is complete:
+  - `meep_gui.analysis.recipes` owns the active analysis registry
+  - `run_by_kind(...)`, sweep orchestration, and script generation resolve recipes first
+- Phase 3 is complete for the current batch:
+  - scene-feature extraction and backend/recipe support status are validated during runtime/script preparation
+  - `SUPPORTED` proceeds silently, `IGNORED` produces warnings, and `FORBIDDEN` blocks execution/export
+- Phase 4 and Phase 5 remain deferred.
 
 ## Constraints kept during this batch
 - No flag-day rewrite
 - Existing YAML project schema remains unchanged for current features
 - Existing generated-script semantics remain stable for current features
 - The Qt editor model remains in place
-
+- `RunRecord`, `ResultArtifact`, and `PlotRecord` remain unchanged in this batch

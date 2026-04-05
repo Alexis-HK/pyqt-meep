@@ -780,6 +780,42 @@ def test_analysis_tab_blocks_meep_k_points_with_continuous_source(qtbot, monkeyp
     assert "Continuous sources are not supported" in warning_calls[-1][1]
 
 
+def test_analysis_tab_logs_capability_warnings_before_running_mpb(qtbot, monkeypatch) -> None:
+    store = ProjectStore()
+    store.state.domain.symmetry_enabled = True
+    store.state.domain.symmetries = [
+        SymmetryItem(name="mx", kind="mirror", direction="x", phase="-1")
+    ]
+    store.state.sources = [
+        SourceItem(
+            name="pulse",
+            kind="gaussian",
+            component="Ez",
+            props={"fcen": "0.2", "df": "0.1"},
+        )
+    ]
+    store.state.flux_monitors = [FluxMonitorConfig(name="tx")]
+    store.state.analysis = AnalysisConfig(
+        kind="mpb_modesolver",
+        mpb_modesolver=MpbModeSolverConfig(run_tm=True, run_te=False),
+    )
+
+    def _fake_runner(state, log, cancel):
+        return RunResult(status="completed", message="ok")
+
+    monkeypatch.setattr(analysis_tab_module, "default_run_by_kind", _fake_runner)
+
+    tab = AnalysisTab(store)
+    qtbot.addWidget(tab)
+    tab.kind.setCurrentText("mpb_modesolver")
+
+    qtbot.mouseClick(tab.run_button, QtCore.Qt.LeftButton)
+
+    qtbot.waitUntil(lambda: len(store.state.results) == 1, timeout=3000)
+    assert any("ignored by this analysis" in message for message in store.log_history)
+    assert store.state.results[0].status == "completed"
+
+
 def test_frequency_domain_zero_source_run_records_png_and_csv_and_previews_image(
     qtbot, monkeypatch, tmp_path
 ) -> None:

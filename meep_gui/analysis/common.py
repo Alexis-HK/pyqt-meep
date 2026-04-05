@@ -42,37 +42,6 @@ def run_canceled(message: str = "Run canceled by user.") -> RunResult:
     return RunResult(status="canceled", message=message)
 
 
-def require_gaussian_sources(state, analysis_kind: str) -> None:
-    if analysis_kind == "meep_k_points":
-        if not state.sources:
-            raise ValueError("Meep k points requires at least one Gaussian (pulsed) source.")
-        if any(src.kind == "continuous" for src in state.sources):
-            raise ValueError(
-                "Meep k points requires Gaussian (pulsed) sources. "
-                "Continuous sources are not supported."
-            )
-        return
-    if any(src.kind == "continuous" for src in state.sources):
-        if analysis_kind == "harminv":
-            raise ValueError(
-                "Harminv requires Gaussian (pulsed) sources. Continuous sources are not supported."
-            )
-        if analysis_kind == "transmission_spectrum":
-            raise ValueError(
-                "Transmission spectrum requires Gaussian (pulsed) sources. "
-                "Continuous sources are not supported."
-            )
-
-
-def require_continuous_sources(state, analysis_kind: str) -> None:
-    if any(src.kind != "continuous" for src in state.sources):
-        if analysis_kind == "frequency_domain_solver":
-            raise ValueError(
-                "Frequency-domain solver supports only continuous sources. "
-                "Gaussian (pulsed) sources are not supported."
-            )
-
-
 def export_flux_plots(
     flux_results: list[FluxMonitorResult],
     output_dir: str,

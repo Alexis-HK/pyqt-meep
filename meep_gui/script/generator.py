@@ -1,36 +1,41 @@
 from __future__ import annotations
 
-import os
-
+from ..analysis.preparation import (
+    emit_validation_warnings,
+    prepare_script_analysis,
+    raise_for_validation_errors,
+)
+from ..analysis.types import LogFn, ScriptPlan
 from ..model import ProjectState
-from ..scene import compile_project_scene, compile_transmission_scenes
-from .analyses import emit_field_animation, emit_flux_exports, emit_harminv
-from .common import analysis_label, line
-from .frequency_domain import emit_frequency_domain
-from .meep_k_points import emit_meep_k_points
-from .mpb import emit_mpb
+from .analyses import emit_flux_exports
+from .common import line
 from .simulation import (
+    emit_geometry,
     emit_materials,
     emit_parameters,
-    emit_boundary_layers,
-    emit_flux_handles,
-    emit_geometry,
     emit_sources,
     emit_symmetries,
 )
-from .transmission import emit_transmission
 
 
-def _emit_header(lines: list[str], state: ProjectState) -> None:
+def _emit_header(lines: list[str], plan: ScriptPlan) -> None:
     line(lines, "from math import sqrt, exp, sin, cos, tan, log, log10")
     line(lines, "import csv")
     line(lines, "import os")
     line(lines, "import meep as mp")
-    if state.analysis.kind == "mpb_modesolver":
+    if plan.backend == "mpb":
         line(lines, "from meep import mpb")
     line(lines)
     line(lines, "script_dir = os.path.dirname(os.path.abspath(__file__))")
     line(lines)
+
+
+def _primary_scene(plan: ScriptPlan):
+    if plan.transmission is not None:
+        return plan.transmission.scattering.scene
+    if plan.scene is not None:
+        return plan.scene.scene
+    raise ValueError("Script plan does not include a compiled scene.")
 
 
 def _emit_geometry_and_sources(lines: list[str], scene) -> None:
@@ -97,57 +102,32 @@ def _emit_fdtd_setup(
         line(lines)
 
 
-def _emit_analysis(lines: list[str], state: ProjectState, scene, reference_scene) -> None:
-    kind = state.analysis.kind
-    if kind == "field_animation":
-        emit_field_animation(lines, state.analysis.field_animation)
-    elif kind == "harminv":
-        emit_harminv(lines, state.analysis.harminv)
-    elif kind == "transmission_spectrum":
-        emit_transmission(lines, state, scene, reference_scene)
-    elif kind == "frequency_domain_solver":
-        emit_frequency_domain(lines, state)
-    elif kind == "meep_k_points":
-        emit_meep_k_points(lines, state)
-    elif kind == "mpb_modesolver":
-        emit_mpb(lines, state)
+def generate_script(state: ProjectState, log: LogFn | None = None) -> str:
+    prepared = prepare_script_analysis(state)
+    if log is not None:
+        emit_validation_warnings(prepared.validation, log)
+    raise_for_validation_errors(prepared.validation)
 
-
-def generate_script(state: ProjectState) -> str:
-    if state.analysis.kind == "transmission_spectrum":
-        bundle = compile_transmission_scenes(state)
-        scene = bundle.scattering.scene
-        reference_scene = bundle.reference.scene
-    else:
-        compiled = compile_project_scene(state)
-        scene = compiled.scene
-        reference_scene = None
-
+    scene = _primary_scene(prepared.plan)
     lines: list[str] = []
-    _emit_header(lines, state)
+    _emit_header(lines, prepared.plan)
     emit_parameters(lines, scene)
     emit_materials(lines, scene)
     _emit_geometry_and_sources(lines, scene)
     _emit_fdtd_setup(
         lines,
         scene,
-        enabled=state.analysis.kind not in {"mpb_modesolver", "transmission_spectrum"},
-        force_complex_fields=state.analysis.kind == "frequency_domain_solver",
-        include_flux_monitors=state.analysis.kind
-        not in {"frequency_domain_solver", "meep_k_points"},
+        enabled=prepared.recipe.uses_fdtd_script_setup(prepared.plan),
+        force_complex_fields=prepared.recipe.script_force_complex_fields(prepared.plan),
+        include_flux_monitors=prepared.recipe.script_include_flux_monitors(prepared.plan),
     )
-    _emit_analysis(lines, state, scene, reference_scene)
+    prepared.recipe.emit_script(state, prepared.plan, lines)
 
-    if scene.monitors and state.analysis.kind not in {
-        "mpb_modesolver",
-        "transmission_spectrum",
-        "frequency_domain_solver",
-        "meep_k_points",
-    }:
+    if scene.monitors and prepared.recipe.script_include_flux_exports(prepared.plan):
         emit_flux_exports(lines)
 
     line(lines)
-    line(lines, f"# Analysis type: {analysis_label(state.analysis.kind)}")
+    line(lines, f"# Analysis type: {prepared.recipe.display_name}")
     if state.sweep.enabled and state.sweep.params:
         line(lines, "# Sweep configured in GUI; run manually in Python if needed.")
     return "\n".join(lines)

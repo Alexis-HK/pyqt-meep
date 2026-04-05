@@ -33,8 +33,6 @@ def run_transmission_spectrum_impl(
     state = copy.deepcopy(state)
     cfg = state.analysis.transmission_spectrum
     reference_state = build_transmission_reference_state(state)
-    deps._requires_gaussian_sources(reference_state, "transmission_spectrum")
-    deps._requires_gaussian_sources(state, "transmission_spectrum")
 
     values, results = deps.evaluate_parameters(state.parameters)
     for result in results:

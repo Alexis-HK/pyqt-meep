@@ -188,15 +188,9 @@ def run_sweep_impl(
     if not state.sweep.enabled or not state.sweep.params:
         return RunResult(status="failed", message="Sweep is enabled without any sweep parameters.")
 
-    runner = {
-        "field_animation": deps.run_field_animation,
-        "harminv": deps.run_harminv,
-        "transmission_spectrum": deps.run_transmission_spectrum,
-        "frequency_domain_solver": deps.run_frequency_domain_solver,
-        "meep_k_points": deps.run_meep_k_points,
-        "mpb_modesolver": deps.run_mpb_modesolver,
-    }.get(state.analysis.kind)
-    if runner is None:
+    try:
+        recipe = deps.get_recipe(state.analysis.kind)
+    except ValueError:
         return RunResult(status="failed", message=f"Unsupported analysis kind: {state.analysis.kind}")
 
     queue = _build_sweep_queue(state, deps=deps)
@@ -223,7 +217,16 @@ def run_sweep_impl(
 
         try:
             run_state = _apply_sweep_value(state, item)
-            result = runner(run_state, log, cancel_requested)
+            prepared = deps.prepare_runtime_analysis_for_kind(recipe.recipe_id, run_state)
+            deps.emit_validation_warnings(prepared.validation, log)
+            deps.raise_for_validation_errors(prepared.validation)
+            result = recipe.run(
+                run_state,
+                prepared.plan,
+                log,
+                cancel_requested,
+                deps=deps,
+            )
         except Exception as exc:
             failed = _decorate_sweep_result(
                 RunResult(status="failed", message=str(exc)),

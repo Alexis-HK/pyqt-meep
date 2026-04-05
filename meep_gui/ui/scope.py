@@ -72,40 +72,6 @@ def parameter_names(store: ProjectStore) -> list[str]:
     return [param.name for param in store.state.parameters]
 
 
-def analysis_source_issue(store: ProjectStore, kind: str) -> str | None:
-    if kind == "harminv":
-        if any(src.kind == "continuous" for src in store.state.sources):
-            return "Harminv requires Gaussian (pulsed) sources. Continuous sources are not supported."
-        return None
-    if kind == "transmission_spectrum":
-        tx_reference = store.state.analysis.transmission_spectrum.reference_state
-        if any(src.kind == "continuous" for src in store.state.sources) or any(
-            src.kind == "continuous" for src in tx_reference.sources
-        ):
-            return (
-                "Transmission spectrum requires Gaussian (pulsed) sources for broadband normalization. "
-                "Continuous sources are not supported."
-            )
-        return None
-    if kind == "frequency_domain_solver":
-        if store.state.sources and any(src.kind != "continuous" for src in store.state.sources):
-            return (
-                "Frequency-domain solver supports only continuous sources. "
-                "Gaussian (pulsed) sources are not supported."
-            )
-        return None
-    if kind == "meep_k_points":
-        if not store.state.sources:
-            return "Meep k points requires at least one Gaussian (pulsed) source."
-        if any(src.kind == "continuous" for src in store.state.sources):
-            return (
-                "Meep k points requires Gaussian (pulsed) sources. "
-                "Continuous sources are not supported."
-            )
-        return None
-    return None
-
-
 def transmission_monitor_signature_from_state(
     store: ProjectStore,
     incident_name: str,

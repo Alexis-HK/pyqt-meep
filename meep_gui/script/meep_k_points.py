@@ -6,16 +6,6 @@ from .common import line
 def emit_meep_k_points(lines: list[str], state) -> None:
     cfg = state.analysis.meep_k_points
 
-    if not state.sources:
-        raise ValueError("Meep k points requires at least one Gaussian (pulsed) source.")
-    if any(src.kind == "continuous" for src in state.sources):
-        raise ValueError(
-            "Meep k points requires Gaussian (pulsed) sources. "
-            "Continuous sources are not supported."
-        )
-    if len(cfg.kpoints) < 2:
-        raise ValueError("Meep k points requires at least two input k-points.")
-
     prefix = (cfg.output_prefix.strip() or "meep_k_points").replace("\\", "_").replace("/", "_")
 
     line(lines, "# Meep k points")

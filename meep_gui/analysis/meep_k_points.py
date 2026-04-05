@@ -54,7 +54,6 @@ def run_meep_k_points_impl(
 ) -> RunResult:
     state = copy.deepcopy(state)
     cfg = state.analysis.meep_k_points
-    deps._requires_gaussian_sources(state, "meep_k_points")
 
     values, results = deps.evaluate_parameters(state.parameters)
     for result in results:

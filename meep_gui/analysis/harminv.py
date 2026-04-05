@@ -21,7 +21,6 @@ def run_harminv_impl(
 
     state = copy.deepcopy(state)
     cfg = state.analysis.harminv
-    deps._requires_gaussian_sources(state, "harminv")
 
     values, results = deps.evaluate_parameters(state.parameters)
     for result in results:

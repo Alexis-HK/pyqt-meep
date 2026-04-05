@@ -33,7 +33,6 @@ def run_frequency_domain_solver_impl(
 ) -> RunResult:
     state = copy.deepcopy(state)
     cfg = state.analysis.frequency_domain_solver
-    deps._requires_continuous_sources(state, "frequency_domain_solver")
 
     values, results = deps.evaluate_parameters(state.parameters)
     for result in results:

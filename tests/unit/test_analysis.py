@@ -41,6 +41,15 @@ def _log(_msg: str) -> None:
     return
 
 
+def _patch_recipe_runner(monkeypatch, kind: str, runner) -> None:
+    recipe = analysis.get_recipe(kind)
+    monkeypatch.setattr(
+        type(recipe),
+        "run",
+        lambda self, state, plan, log, cancel, *, deps: runner(state, log, cancel),
+    )
+
+
 def test_run_by_kind_with_unknown_analysis_returns_failed() -> None:
     state = ProjectState(analysis=AnalysisConfig(kind="unknown"))
 
@@ -282,7 +291,7 @@ def test_sweep_uses_step_size_and_publishes_each_point(monkeypatch) -> None:
             ],
         )
 
-    monkeypatch.setattr(analysis, "run_frequency_domain_solver", _fake_runner)
+    _patch_recipe_runner(monkeypatch, "frequency_domain_solver", _fake_runner)
 
     state = ProjectState(
         analysis=AnalysisConfig(kind="frequency_domain_solver"),
@@ -314,7 +323,7 @@ def test_sweep_supports_descending_and_single_value(monkeypatch) -> None:
         calls.append(next(param.expr for param in state.parameters if param.name == "a"))
         return RunResult(status="completed", message="ok")
 
-    monkeypatch.setattr(analysis, "run_frequency_domain_solver", _fake_runner)
+    _patch_recipe_runner(monkeypatch, "frequency_domain_solver", _fake_runner)
 
     descending = ProjectState(
         analysis=AnalysisConfig(kind="frequency_domain_solver"),
@@ -347,9 +356,9 @@ def test_sweep_supports_descending_and_single_value(monkeypatch) -> None:
 
 
 def test_sweep_rejects_zero_or_wrong_direction_step(monkeypatch) -> None:
-    monkeypatch.setattr(
-        analysis,
-        "run_frequency_domain_solver",
+    _patch_recipe_runner(
+        monkeypatch,
+        "frequency_domain_solver",
         lambda state, log, cancel: RunResult(status="completed"),
     )
 
@@ -384,7 +393,7 @@ def test_multiple_sweep_rows_run_sequentially_not_cartesian(monkeypatch) -> None
         calls.append((params["a"], params["b"]))
         return RunResult(status="completed", message="ok")
 
-    monkeypatch.setattr(analysis, "run_frequency_domain_solver", _fake_runner)
+    _patch_recipe_runner(monkeypatch, "frequency_domain_solver", _fake_runner)
 
     state = ProjectState(
         analysis=AnalysisConfig(kind="frequency_domain_solver"),
@@ -493,11 +502,24 @@ def test_sweep_dispatches_meep_k_points(monkeypatch) -> None:
         calls.append(next(param.expr for param in state.parameters if param.name == "a"))
         return RunResult(status="completed", message="ok", meta={"primary_frequency": "0.25"})
 
-    monkeypatch.setattr(analysis, "run_meep_k_points", _fake_runner)
+    _patch_recipe_runner(monkeypatch, "meep_k_points", _fake_runner)
 
     state = ProjectState(
-        analysis=AnalysisConfig(kind="meep_k_points"),
+        analysis=AnalysisConfig(
+            kind="meep_k_points",
+            meep_k_points=MeepKPointsConfig(
+                kpoints=[KPoint(kx="0", ky="0"), KPoint(kx="0.5", ky="0")]
+            ),
+        ),
         parameters=[Parameter(name="a", expr="1")],
+        sources=[
+            SourceItem(
+                name="src",
+                kind="gaussian",
+                component="Ez",
+                props={"fcen": "0.15", "df": "0.1"},
+            )
+        ],
         sweep=SweepConfig(
             enabled=True,
             params=[SweepParameter(name="a", start="1", stop="2", steps="1")],
@@ -519,7 +541,7 @@ def test_sweep_dispatches_harminv(monkeypatch) -> None:
         calls.append(next(param.expr for param in state.parameters if param.name == "a"))
         return RunResult(status="completed", message="ok")
 
-    monkeypatch.setattr(analysis, "run_harminv", _fake_runner)
+    _patch_recipe_runner(monkeypatch, "harminv", _fake_runner)
 
     state = ProjectState(
         analysis=AnalysisConfig(kind="harminv"),
@@ -543,11 +565,26 @@ def test_sweep_dispatches_transmission_spectrum(monkeypatch) -> None:
         calls.append(next(param.expr for param in state.parameters if param.name == "a"))
         return RunResult(status="completed", message="ok")
 
-    monkeypatch.setattr(analysis, "run_transmission_spectrum", _fake_runner)
+    _patch_recipe_runner(monkeypatch, "transmission_spectrum", _fake_runner)
 
     state = ProjectState(
-        analysis=AnalysisConfig(kind="transmission_spectrum"),
+        analysis=AnalysisConfig(
+            kind="transmission_spectrum",
+            transmission_spectrum=TransmissionSpectrumConfig(
+                incident_monitor="inc",
+                transmission_monitor="tx",
+            ),
+        ),
         parameters=[Parameter(name="a", expr="1")],
+        sources=[
+            SourceItem(
+                name="src",
+                kind="gaussian",
+                component="Ez",
+                props={"fcen": "0.15", "df": "0.1"},
+            )
+        ],
+        flux_monitors=[FluxMonitorConfig(name="tx")],
         sweep=SweepConfig(
             enabled=True,
             params=[SweepParameter(name="a", start="1", stop="2", steps="1")],
@@ -575,7 +612,7 @@ def test_sweep_stops_on_first_failed_point_and_publishes_failure(monkeypatch) ->
             )
         return RunResult(status="completed", message="ok")
 
-    monkeypatch.setattr(analysis, "run_frequency_domain_solver", _fake_runner)
+    _patch_recipe_runner(monkeypatch, "frequency_domain_solver", _fake_runner)
 
     state = ProjectState(
         analysis=AnalysisConfig(kind="frequency_domain_solver"),
@@ -611,7 +648,7 @@ def test_sweep_cancel_after_partial_completion(monkeypatch) -> None:
             cancel_state["requested"] = True
         return RunResult(status="completed", message="ok")
 
-    monkeypatch.setattr(analysis, "run_frequency_domain_solver", _fake_runner)
+    _patch_recipe_runner(monkeypatch, "frequency_domain_solver", _fake_runner)
 
     state = ProjectState(
         analysis=AnalysisConfig(kind="frequency_domain_solver"),

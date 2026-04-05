@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from PyQt5 import QtWidgets
 
-from ...analysis import RunResult, run_by_kind as default_run_by_kind
+from ...analysis import (
+    RunResult,
+    emit_validation_warnings,
+    prepare_runtime_analysis,
+    run_by_kind as default_run_by_kind,
+)
 from ...model import AnalysisConfig
 from ...store import ProjectStore
 from ..common import _log_error
@@ -14,7 +19,6 @@ from ..panels import (
     MpbPanel,
     TransmissionSpectrumPanel,
 )
-from ..scope import analysis_source_issue
 
 
 class AnalysisTab(QtWidgets.QWidget):
@@ -109,11 +113,19 @@ class AnalysisTab(QtWidgets.QWidget):
     def _on_run(self) -> None:
         if not self._apply_active_panel():
             return
-        kind = self.kind.currentText()
-        message = analysis_source_issue(self.store, kind)
-        if message:
+        try:
+            prepared = prepare_runtime_analysis(self.store.state)
+        except Exception as exc:
+            message = str(exc)
             self.store.log_message(message, dedupe=False)
-            QtWidgets.QMessageBox.warning(self, "Unsupported source type", message)
+            QtWidgets.QMessageBox.warning(self, "Run blocked", message)
+            return
+
+        emit_validation_warnings(prepared.validation, self.store.log_message)
+        if not prepared.validation.ok:
+            message = prepared.validation.errors[0].message
+            self.store.log_message(message, dedupe=False)
+            QtWidgets.QMessageBox.warning(self, "Run blocked", message)
             return
         started = self.store.run_manager.start(default_run_by_kind, self.store.state)
         if not started:

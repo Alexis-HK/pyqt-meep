@@ -9,13 +9,16 @@ import pytest
 def test_supported_headless_public_modules_import_and_expose_expected_names() -> None:
     import meep_gui
     from meep_gui import analysis, model, persistence, scene, script, validation
+    from meep_gui.analysis import recipes
 
     assert callable(meep_gui.main)
     assert hasattr(model, "ProjectState")
     assert callable(analysis.run_by_kind)
+    assert callable(analysis.prepare_runtime_analysis)
     assert callable(script.generate_script)
     assert callable(persistence.state_from_dict)
     assert callable(scene.compile_project_scene)
+    assert callable(recipes.get_recipe)
     assert callable(validation.evaluate_parameters)
 
 

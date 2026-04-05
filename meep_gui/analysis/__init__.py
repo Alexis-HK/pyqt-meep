@@ -12,18 +12,31 @@ from .common import (
     eval_required as _eval_required,
     export_flux_plots as _export_flux_plots,
     harminv_lines as _harminv_lines,
-    require_continuous_sources as _requires_continuous_sources,
-    require_gaussian_sources as _requires_gaussian_sources,
     run_canceled as _run_canceled,
 )
-from .frequency_domain import run_frequency_domain_solver_impl
-from .field_animation import run_field_animation_impl
-from .harminv import run_harminv_impl
-from .meep_k_points import run_meep_k_points_impl
-from .mpb import _save_image, run_mpb_modesolver_impl
+from .mpb import _save_image
+from .preparation import (
+    emit_validation_warnings,
+    prepare_runtime_analysis,
+    prepare_runtime_analysis_for_kind,
+    raise_for_validation_errors,
+)
+from .recipes import RECIPE_REGISTRY, get_recipe
 from .sweep import run_sweep_impl
-from .transmission import run_transmission_spectrum_impl
-from .types import ArtifactResult, CancelFn, LogFn, PlotResult, PublishFn, RunResult
+from .types import (
+    ArtifactResult,
+    CancelFn,
+    LogFn,
+    PlotResult,
+    PublishFn,
+    RunResult,
+    RuntimePlan,
+    SceneFeature,
+    ScriptPlan,
+    SupportStatus,
+    ValidationIssue,
+    ValidationReport,
+)
 
 _build_flux_specs = build_flux_specs
 _build_sim_params = build_sim_params
@@ -38,12 +51,45 @@ def _import_mpb():
     return mp, mpb
 
 
+def _run_prepared_analysis(
+    state: ProjectState,
+    log: LogFn,
+    cancel_requested: CancelFn,
+    *,
+    prepared,
+) -> RunResult:
+    emit_validation_warnings(prepared.validation, log)
+    raise_for_validation_errors(prepared.validation)
+    return prepared.recipe.run(
+        state,
+        prepared.plan,
+        log,
+        cancel_requested,
+        deps=sys.modules[__name__],
+    )
+
+
+def _run_named_recipe(
+    kind: str,
+    state: ProjectState,
+    log: LogFn,
+    cancel_requested: CancelFn,
+) -> RunResult:
+    prepared = prepare_runtime_analysis_for_kind(kind, state)
+    return _run_prepared_analysis(
+        state,
+        log,
+        cancel_requested,
+        prepared=prepared,
+    )
+
+
 def run_field_animation(state: ProjectState, log: LogFn, cancel_requested: CancelFn) -> RunResult:
-    return run_field_animation_impl(state, log, cancel_requested, deps=sys.modules[__name__])
+    return _run_named_recipe("field_animation", state, log, cancel_requested)
 
 
 def run_harminv(state: ProjectState, log: LogFn, cancel_requested: CancelFn) -> RunResult:
-    return run_harminv_impl(state, log, cancel_requested, deps=sys.modules[__name__])
+    return _run_named_recipe("harminv", state, log, cancel_requested)
 
 
 def run_transmission_spectrum(
@@ -51,7 +97,7 @@ def run_transmission_spectrum(
     log: LogFn,
     cancel_requested: CancelFn,
 ) -> RunResult:
-    return run_transmission_spectrum_impl(state, log, cancel_requested, deps=sys.modules[__name__])
+    return _run_named_recipe("transmission_spectrum", state, log, cancel_requested)
 
 
 def run_frequency_domain_solver(
@@ -59,7 +105,7 @@ def run_frequency_domain_solver(
     log: LogFn,
     cancel_requested: CancelFn,
 ) -> RunResult:
-    return run_frequency_domain_solver_impl(state, log, cancel_requested, deps=sys.modules[__name__])
+    return _run_named_recipe("frequency_domain_solver", state, log, cancel_requested)
 
 
 def run_mpb_modesolver(
@@ -67,7 +113,7 @@ def run_mpb_modesolver(
     log: LogFn,
     cancel_requested: CancelFn,
 ) -> RunResult:
-    return run_mpb_modesolver_impl(state, log, cancel_requested, deps=sys.modules[__name__])
+    return _run_named_recipe("mpb_modesolver", state, log, cancel_requested)
 
 
 def run_meep_k_points(
@@ -75,7 +121,7 @@ def run_meep_k_points(
     log: LogFn,
     cancel_requested: CancelFn,
 ) -> RunResult:
-    return run_meep_k_points_impl(state, log, cancel_requested, deps=sys.modules[__name__])
+    return _run_named_recipe("meep_k_points", state, log, cancel_requested)
 
 
 def run_sweep(
@@ -101,19 +147,14 @@ def run_by_kind(
 ) -> RunResult:
     if state.sweep.enabled and state.sweep.params:
         return run_sweep(state, log, cancel_requested, publish_result=publish_result)
-    if state.analysis.kind == "field_animation":
-        return run_field_animation(state, log, cancel_requested)
-    if state.analysis.kind == "harminv":
-        return run_harminv(state, log, cancel_requested)
-    if state.analysis.kind == "transmission_spectrum":
-        return run_transmission_spectrum(state, log, cancel_requested)
-    if state.analysis.kind == "frequency_domain_solver":
-        return run_frequency_domain_solver(state, log, cancel_requested)
-    if state.analysis.kind == "meep_k_points":
-        return run_meep_k_points(state, log, cancel_requested)
-    if state.analysis.kind == "mpb_modesolver":
-        return run_mpb_modesolver(state, log, cancel_requested)
-    return RunResult(status="failed", message=f"Unsupported analysis kind: {state.analysis.kind}")
+    try:
+        prepared = prepare_runtime_analysis(state)
+    except ValueError as exc:
+        message = str(exc)
+        if message.startswith("Unsupported analysis kind:"):
+            return RunResult(status="failed", message=message)
+        raise
+    return _run_prepared_analysis(state, log, cancel_requested, prepared=prepared)
 
 
 __all__ = [
@@ -124,12 +165,23 @@ __all__ = [
     "LogFn",
     "PlotResult",
     "PublishFn",
+    "RECIPE_REGISTRY",
     "RunResult",
+    "RuntimePlan",
+    "SceneFeature",
+    "ScriptPlan",
     "SimParams",
+    "SupportStatus",
+    "ValidationIssue",
+    "ValidationReport",
     "build_flux_specs",
     "build_sim_params",
-    "evaluate_parameters",
     "build_sim",
+    "emit_validation_warnings",
+    "evaluate_parameters",
+    "get_recipe",
+    "prepare_runtime_analysis",
+    "raise_for_validation_errors",
     "run_by_kind",
     "run_field_animation",
     "run_frequency_domain_solver",
@@ -145,8 +197,6 @@ __all__ = [
     "_harminv_lines",
     "_import_meep",
     "_import_mpb",
-    "_requires_continuous_sources",
-    "_requires_gaussian_sources",
     "_run_canceled",
     "_save_image",
     "run_sim",
