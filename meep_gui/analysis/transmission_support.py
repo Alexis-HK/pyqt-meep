@@ -133,6 +133,58 @@ def ensure_exact_frequency_grid(expected_freqs: list[float], actual_freqs: list[
             )
 
 
+def align_reused_incident_data(
+    cached_freqs: list[float],
+    cached_incident: list[float],
+    scattering_freqs: list[float],
+    scattering_transmitted: list[float],
+) -> tuple[list[float], list[float], list[float], list[str]]:
+    usable = min(
+        len(cached_freqs),
+        len(cached_incident),
+        len(scattering_freqs),
+        len(scattering_transmitted),
+    )
+    if usable <= 0:
+        raise RuntimeError(
+            "Cached reference incident data and scattering monitor output do not share any usable "
+            "samples. Clear reuse selection or rerun a fresh reference."
+        )
+
+    warnings: list[str] = []
+    if usable < max(
+        len(cached_freqs),
+        len(cached_incident),
+        len(scattering_freqs),
+        len(scattering_transmitted),
+    ):
+        warnings.append(
+            "Warning: cached reference incident data and scattering monitor output lengths differ; "
+            f"truncating to {usable} shared samples."
+        )
+
+    cached_freqs = list(cached_freqs[:usable])
+    cached_incident = list(cached_incident[:usable])
+    scattering_freqs = list(scattering_freqs[:usable])
+    scattering_transmitted = list(scattering_transmitted[:usable])
+
+    mismatch_idx = next(
+        (
+            idx
+            for idx, (cached, current) in enumerate(zip(cached_freqs, scattering_freqs))
+            if abs(float(cached) - float(current)) > 1e-12
+        ),
+        None,
+    )
+    if mismatch_idx is not None:
+        warnings.append(
+            "Warning: cached reference frequency grid differs from scattering monitor frequencies; "
+            "pairing incident and transmitted data by index using the current scattering frequency axis."
+        )
+
+    return scattering_freqs, cached_incident, scattering_transmitted, warnings
+
+
 def flux_by_name(flux_results) -> dict[str, object]:
     return {item.name: item for item in flux_results}
 

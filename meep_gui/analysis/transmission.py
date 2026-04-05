@@ -5,10 +5,9 @@ import os
 
 from ..model import ProjectState
 from .transmission_support import (
+    align_reused_incident_data,
     artifact_path_by_kind,
     build_transmission_reference_state,
-    ensure_exact_frequency_grid,
-    ensure_reuse_monitor_compatibility,
     export_transmission_outputs,
     find_flux_spec_by_name,
     find_run_record_by_id,
@@ -142,12 +141,6 @@ def run_transmission_spectrum_impl(
             raise ValueError(
                 f"Selected cached run '{reuse_reference_run_id}' does not include transmission CSV data."
             )
-        ensure_reuse_monitor_compatibility(
-            selected_run.meta,
-            incident_spec,
-            transmission_spec,
-            selected_run.run_id,
-        )
         incident_freqs, incident_vals = load_incident_data_from_transmission_csv(csv_path)
         reference_mode = "reused"
         reused_reference_run_id = selected_run.run_id
@@ -229,14 +222,14 @@ def run_transmission_spectrum_impl(
     trans_values = trans_values[:n_trans]
 
     if reference_mode == "reused":
-        ensure_exact_frequency_grid(incident_freqs, trans_freqs)
-        if len(incident_vals) != len(trans_values):
-            raise RuntimeError(
-                "Cached reference incident values do not match scattering monitor sample count. "
-                "Clear reuse selection or rerun a fresh reference."
-            )
-        freqs = list(trans_freqs)
-        trans_vals = list(trans_values)
+        freqs, incident_vals, trans_vals, reuse_warnings = align_reused_incident_data(
+            incident_freqs,
+            incident_vals,
+            trans_freqs,
+            trans_values,
+        )
+        for message in reuse_warnings:
+            log(message)
     else:
         n = min(
             len(incident_freqs),

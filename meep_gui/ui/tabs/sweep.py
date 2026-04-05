@@ -13,6 +13,7 @@ class SweepTab(QtWidgets.QWidget):
     def __init__(self, store: ProjectStore) -> None:
         super().__init__()
         self.store = store
+        self._pending_select_name: str | None = None
 
         self.enabled = QtWidgets.QCheckBox("Enable sweep")
 
@@ -33,6 +34,8 @@ class SweepTab(QtWidgets.QWidget):
         self.add_button = QtWidgets.QPushButton("Add")
         self.update_button = QtWidgets.QPushButton("Update")
         self.remove_button = QtWidgets.QPushButton("Remove")
+        self.update_button.setDisabled(True)
+        self.remove_button.setDisabled(True)
         btn_row = QtWidgets.QHBoxLayout()
         btn_row.addWidget(self.add_button)
         btn_row.addWidget(self.update_button)
@@ -77,6 +80,12 @@ class SweepTab(QtWidgets.QWidget):
         elif self.param_name.count() > 0:
             self.param_name.setCurrentIndex(0)
         self.param_name.blockSignals(False)
+
+    def _update_buttons(self) -> None:
+        row = self._current_row()
+        can_edit = 0 <= row < len(self.store.state.sweep.params)
+        self.update_button.setDisabled(not can_edit)
+        self.remove_button.setDisabled(not can_edit)
 
     def _validate_param(self, row: int) -> bool:
         name = self.param_name.currentText().strip()
@@ -132,15 +141,19 @@ class SweepTab(QtWidgets.QWidget):
         row = len(self.store.state.sweep.params)
         if not self._validate_param(row):
             return
-        params = list(self.store.state.sweep.params) + [self._build_param()]
+        param = self._build_param()
+        params = list(self.store.state.sweep.params) + [param]
+        self._pending_select_name = param.name
         self._replace_params(params)
 
     def _on_update(self) -> None:
         row = self._current_row()
         if row < 0 or not self._validate_param(row):
             return
+        param = self._build_param()
         params = list(self.store.state.sweep.params)
-        params[row] = self._build_param()
+        params[row] = param
+        self._pending_select_name = param.name
         self._replace_params(params)
 
     def _on_remove(self) -> None:
@@ -149,11 +162,18 @@ class SweepTab(QtWidgets.QWidget):
             return
         params = list(self.store.state.sweep.params)
         params.pop(row)
+        if row < len(params):
+            self._pending_select_name = params[row].name
+        elif params:
+            self._pending_select_name = params[-1].name
+        else:
+            self._pending_select_name = None
         self._replace_params(params)
 
     def _on_select(self) -> None:
         row = self._current_row()
-        if row < 0:
+        if row < 0 or row >= len(self.store.state.sweep.params):
+            self._update_buttons()
             return
         param = self.store.state.sweep.params[row]
         idx = self.param_name.findText(param.name)
@@ -162,10 +182,17 @@ class SweepTab(QtWidgets.QWidget):
         self.start.setText(param.start)
         self.stop.setText(param.stop)
         self.steps.setText(param.steps)
+        self._update_buttons()
 
     def refresh(self) -> None:
-        self._refresh_param_names()
         sweep = self.store.state.sweep
+        selected_name = self._pending_select_name
+        if selected_name is None:
+            row = self._current_row()
+            if 0 <= row < len(sweep.params):
+                selected_name = sweep.params[row].name
+
+        self._refresh_param_names()
         self.enabled.blockSignals(True)
         self.enabled.setChecked(sweep.enabled)
         self.enabled.blockSignals(False)
@@ -178,3 +205,12 @@ class SweepTab(QtWidgets.QWidget):
             self.table.setItem(row, 1, QtWidgets.QTableWidgetItem(item.start))
             self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(item.stop))
             self.table.setItem(row, 3, QtWidgets.QTableWidgetItem(item.steps))
+
+        self._pending_select_name = None
+        if selected_name:
+            for row in range(self.table.rowCount()):
+                item = self.table.item(row, 0)
+                if item is not None and item.text() == selected_name:
+                    self.table.setCurrentCell(row, 0)
+                    break
+        self._update_buttons()

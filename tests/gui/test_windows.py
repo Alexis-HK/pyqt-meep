@@ -791,7 +791,7 @@ def test_analysis_panels_omit_old_descriptive_prose(qtbot) -> None:
     ) not in panel_texts[4]
 
 
-def test_transmission_reuse_dropdown_filters_compatible_runs_and_updates_config(
+def test_transmission_reuse_dropdown_lists_completed_runs_and_uses_output_labels(
     qtbot, tmp_path
 ) -> None:
     store = ProjectStore()
@@ -811,9 +811,31 @@ def test_transmission_reuse_dropdown_filters_compatible_runs_and_updates_config(
     ok_csv.write_text("frequency,incident\n0.62,2.0\n", encoding="utf-8")
     bad_csv = tmp_path / "bad.csv"
     bad_csv.write_text("frequency,incident\n0.62,2.0\n", encoding="utf-8")
+    sweep_csv = tmp_path / "sweep.csv"
+    sweep_csv.write_text("frequency,incident\n0.62,2.0\n", encoding="utf-8")
 
     store.state.results.extend(
         [
+            RunRecord(
+                run_id="skip_kind",
+                analysis_kind="harminv",
+                status="completed",
+                created_at="2026-02-10T08:55:00",
+                artifacts=[ResultArtifact(kind="text", label="notes.txt", path="")],
+            ),
+            RunRecord(
+                run_id="missing_csv",
+                analysis_kind="transmission_spectrum",
+                status="completed",
+                created_at="2026-02-10T08:58:00",
+                artifacts=[
+                    ResultArtifact(
+                        kind="transmission_csv",
+                        label="missing.csv",
+                        path=str(tmp_path / "missing.csv"),
+                    )
+                ],
+            ),
             RunRecord(
                 run_id="ok_run",
                 analysis_kind="transmission_spectrum",
@@ -846,26 +868,107 @@ def test_transmission_reuse_dropdown_filters_compatible_runs_and_updates_config(
                     "dev_trans_nfreq": "10",
                 },
             ),
+            RunRecord(
+                run_id="sweep_run",
+                analysis_kind="transmission_spectrum",
+                status="completed",
+                created_at="2026-02-10T09:10:00",
+                artifacts=[ResultArtifact(kind="transmission_csv", label="sweep.csv", path=str(sweep_csv))],
+                meta={"sweep_label": "a=2"},
+            ),
         ]
     )
 
     panel = TransmissionSpectrumPanel(store)
+    win = OutputWindow(store)
     qtbot.addWidget(panel)
+    qtbot.addWidget(win)
     panel.load_from_config(store.state.analysis.transmission_spectrum)
 
-    assert panel.reuse_reference.count() == 2
-    ok_idx = panel.reuse_reference.findData("ok_run")
-    assert ok_idx >= 0
-    assert panel.reuse_reference.findData("bad_run") < 0
+    assert panel.reuse_reference.count() == 4
+    assert panel.reuse_reference.findData("skip_kind") < 0
+    assert panel.reuse_reference.findData("missing_csv") < 0
+
+    reuse_labels = {
+        panel.reuse_reference.itemData(i): panel.reuse_reference.itemText(i)
+        for i in range(1, panel.reuse_reference.count())
+    }
+    output_labels = {
+        win.run_list.item(i).data(QtCore.Qt.UserRole): win.run_list.item(i).text()
+        for i in range(win.run_list.count())
+    }
+    assert set(reuse_labels) == {"ok_run", "bad_run", "sweep_run"}
+    assert reuse_labels["ok_run"] == output_labels["ok_run"]
+    assert reuse_labels["bad_run"] == output_labels["bad_run"]
+    assert reuse_labels["sweep_run"] == output_labels["sweep_run"]
 
     panel.animate_reference.setChecked(True)
-    panel.reuse_reference.setCurrentIndex(ok_idx)
+    panel.reuse_reference.setCurrentIndex(panel.reuse_reference.findData("bad_run"))
 
     assert not panel.animate_reference.isChecked()
     assert not panel.animate_reference.isEnabled()
     cfg = store.state.analysis.transmission_spectrum
-    assert cfg.reuse_reference_run_id == "ok_run"
-    assert cfg.reuse_reference_csv_name == "ok.csv"
+    assert cfg.reuse_reference_run_id == "bad_run"
+    assert cfg.reuse_reference_csv_name == "bad.csv"
+
+
+def test_sweep_tab_preserves_selection_on_update_and_remove(qtbot) -> None:
+    store = ProjectStore()
+    store.state.parameters = [
+        Parameter(name="a", expr="1"),
+        Parameter(name="b", expr="2"),
+        Parameter(name="c", expr="3"),
+    ]
+    store.state.sweep = SweepConfig(
+        enabled=True,
+        params=[
+            SweepParameter(name="a", start="1", stop="2", steps="0.5"),
+            SweepParameter(name="b", start="3", stop="4", steps="0.5"),
+        ],
+    )
+
+    tab = SweepTab(store)
+    qtbot.addWidget(tab)
+
+    assert not tab.update_button.isEnabled()
+    assert not tab.remove_button.isEnabled()
+
+    tab.table.setCurrentCell(0, 0)
+    qtbot.waitUntil(lambda: tab.update_button.isEnabled(), timeout=3000)
+    assert tab.remove_button.isEnabled()
+    assert tab.param_name.currentText() == "a"
+    assert tab.start.text() == "1"
+
+    tab.param_name.setCurrentText("c")
+    tab.start.setText("10")
+    tab.stop.setText("12")
+    tab.steps.setText("1")
+    qtbot.mouseClick(tab.update_button, QtCore.Qt.LeftButton)
+
+    qtbot.waitUntil(lambda: store.state.sweep.params[0].name == "c", timeout=3000)
+    assert tab._current_row() == 0
+    assert tab.table.item(0, 0).text() == "c"
+    assert tab.table.item(0, 1).text() == "10"
+    assert tab.param_name.currentText() == "c"
+    assert tab.start.text() == "10"
+    assert tab.update_button.isEnabled()
+    assert tab.remove_button.isEnabled()
+
+    qtbot.mouseClick(tab.remove_button, QtCore.Qt.LeftButton)
+
+    qtbot.waitUntil(lambda: len(store.state.sweep.params) == 1, timeout=3000)
+    assert tab._current_row() == 0
+    assert store.state.sweep.params[0].name == "b"
+    assert tab.table.item(0, 0).text() == "b"
+    assert tab.param_name.currentText() == "b"
+    assert tab.update_button.isEnabled()
+    assert tab.remove_button.isEnabled()
+
+    qtbot.mouseClick(tab.remove_button, QtCore.Qt.LeftButton)
+
+    qtbot.waitUntil(lambda: len(store.state.sweep.params) == 0, timeout=3000)
+    assert not tab.update_button.isEnabled()
+    assert not tab.remove_button.isEnabled()
 
 
 def test_analysis_tab_blocks_frequency_domain_run_with_gaussian_source(qtbot, monkeypatch) -> None:

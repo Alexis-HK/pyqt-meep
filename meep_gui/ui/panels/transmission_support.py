@@ -4,13 +4,8 @@ import os
 
 from ...model import FIELD_COMPONENTS
 from ...validation import validate_numeric_expression
-from ..common import _log_error, _set_invalid
-from ..scope import (
-    parameter_names,
-    signatures_match,
-    transmission_monitor_signature_from_meta,
-    transmission_monitor_signature_from_state,
-)
+from ..common import _log_error, _set_invalid, format_run_list_label
+from ..scope import parameter_names
 
 
 def selected_reuse_run_id(panel) -> str:
@@ -66,21 +61,12 @@ def refresh_monitor_choices(panel) -> None:
 
 def refresh_reuse_choices(panel) -> None:
     current_run_id = selected_reuse_run_id(panel)
-    current_signature = transmission_monitor_signature_from_state(
-        panel.store,
-        panel.incident_monitor.currentText(),
-        panel.transmission_monitor.currentText(),
-    )
-
     candidates: dict[str, dict[str, str]] = {}
     panel.reuse_reference.blockSignals(True)
     panel.reuse_reference.clear()
     panel.reuse_reference.addItem("Run fresh reference (default)", "")
     for run in reversed(panel.store.state.results):
         if run.analysis_kind != "transmission_spectrum" or run.status != "completed":
-            continue
-        candidate_signature = transmission_monitor_signature_from_meta(run.meta)
-        if not signatures_match(current_signature, candidate_signature):
             continue
         csv_path = ""
         for artifact in run.artifacts:
@@ -89,13 +75,7 @@ def refresh_reuse_choices(panel) -> None:
                 break
         if not csv_path:
             continue
-        incident = run.meta.get("incident_monitor", "?")
-        transmission = run.meta.get("transmission_monitor", "?")
-        stamp = run.created_at or run.run_id
-        panel.reuse_reference.addItem(
-            f"{stamp} | {run.run_id} | inc:{incident} tx:{transmission}",
-            run.run_id,
-        )
+        panel.reuse_reference.addItem(format_run_list_label(run), run.run_id)
         candidates[run.run_id] = {"csv_path": csv_path, "csv_name": os.path.basename(csv_path)}
 
     if current_run_id in candidates:
@@ -171,7 +151,7 @@ def validate_panel(panel) -> bool:
         _set_invalid(panel.reuse_reference, True)
         _log_error(
             panel.store,
-            f"Selected cached reference run '{reuse_run_id}' is unavailable or incompatible.",
+            f"Selected cached reference run '{reuse_run_id}' is unavailable.",
             panel,
         )
         ok = False

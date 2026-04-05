@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 import meep_gui.analysis as analysis
+import meep_gui.analysis.transmission as transmission_module
 from meep_gui.analysis import (
     ArtifactResult,
     PlotResult,
@@ -122,6 +123,134 @@ def test_transmission_rejects_continuous_sources_in_both_domains() -> None:
 
     with pytest.raises(ValueError, match="Transmission spectrum requires Gaussian"):
         run_by_kind(state, _log, _no_cancel)
+
+
+def test_transmission_reuse_trusts_cached_reference_and_pairs_by_index(
+    monkeypatch, tmp_path
+) -> None:
+    cached_csv = tmp_path / "cached.csv"
+    cached_csv.write_text(
+        "frequency,incident\n0.55,2.0\n0.65,4.0\n",
+        encoding="utf-8",
+    )
+
+    export_calls: dict[str, object] = {}
+    logs: list[str] = []
+    run_calls: list[dict[str, object]] = []
+
+    def _fake_export_transmission_outputs(**kwargs):
+        export_calls.update(kwargs)
+        return (
+            ArtifactResult(kind="transmission_csv", label="out.csv", path=str(tmp_path / "out.csv")),
+            PlotResult(
+                title="Transmission Spectrum",
+                x_label="Frequency",
+                y_label="Normalized Response",
+                csv_path=str(tmp_path / "out.csv"),
+                png_path=str(tmp_path / "out.png"),
+            ),
+        )
+
+    def _fake_build_flux_specs(run_state, _values):
+        return [
+            SimpleNamespace(
+                name=item.name,
+                fcen=float(item.fcen or 0.0),
+                df=float(item.df or 0.0),
+                nfreq=int(item.nfreq or 1),
+            )
+            for item in run_state.flux_monitors
+        ]
+
+    def _fake_run_sim(_params, _log, **kwargs):
+        run_calls.append(kwargs)
+        return SimpleNamespace(
+            canceled=False,
+            flux_results=[
+                SimpleNamespace(
+                    name="dev_tx",
+                    freqs=[0.1, 0.2, 0.3],
+                    values=[6.0, 12.0, 24.0],
+                )
+            ],
+            flux_data={},
+        )
+
+    monkeypatch.setattr(transmission_module, "create_run_output_dir", lambda _prefix: str(tmp_path))
+    monkeypatch.setattr(
+        transmission_module,
+        "export_transmission_outputs",
+        _fake_export_transmission_outputs,
+    )
+
+    state = ProjectState(
+        analysis=AnalysisConfig(
+            kind="transmission_spectrum",
+            transmission_spectrum=TransmissionSpectrumConfig(
+                incident_monitor="ref_inc",
+                transmission_monitor="dev_tx",
+                until_after_sources="100",
+                reuse_reference_run_id="cached_run",
+                reference_state=TransmissionDomainState(
+                    flux_monitors=[
+                        FluxMonitorConfig(name="ref_inc", fcen="0.2", df="0.1", nfreq="50")
+                    ]
+                ),
+            ),
+        ),
+        flux_monitors=[FluxMonitorConfig(name="dev_tx", fcen="0.4", df="0.3", nfreq="10")],
+    )
+    state.results.append(
+        RunRecord(
+            run_id="cached_run",
+            analysis_kind="transmission_spectrum",
+            status="completed",
+            artifacts=[
+                ArtifactResult(
+                    kind="transmission_csv",
+                    label="cached.csv",
+                    path=str(cached_csv),
+                )
+            ],
+            meta={
+                "ref_incident_fcen": "9.9",
+                "ref_incident_df": "8.8",
+                "ref_incident_nfreq": "7",
+                "dev_trans_fcen": "6.6",
+                "dev_trans_df": "5.5",
+                "dev_trans_nfreq": "4",
+            },
+        )
+    )
+
+    deps = SimpleNamespace(
+        run_sim=_fake_run_sim,
+        evaluate_parameters=lambda _params: ({}, []),
+        _eval_required=lambda expr, _values, _name: float(expr),
+        _build_flux_specs=_fake_build_flux_specs,
+        _build_sim_params=lambda _state: object(),
+        _run_canceled=lambda: RunResult(status="canceled"),
+        _import_meep=lambda: None,
+    )
+
+    result = transmission_module.run_transmission_spectrum_impl(
+        state,
+        logs.append,
+        _no_cancel,
+        deps=deps,
+    )
+
+    assert result.status == "completed"
+    assert result.meta["reference_mode"] == "reused"
+    assert result.meta["reused_reference_run_id"] == "cached_run"
+    assert len(run_calls) == 1
+    assert export_calls["freqs"] == [0.1, 0.2]
+    assert export_calls["incident"] == [2.0, 4.0]
+    assert export_calls["transmitted"] == [6.0, 12.0]
+    assert export_calls["trans_ratio"] == [3.0, 3.0]
+    assert any("Skipping reference simulation." in message for message in logs)
+    assert any("lengths differ" in message for message in logs)
+    assert any("frequency grid differs" in message for message in logs)
 
 
 def test_frequency_domain_rejects_gaussian_sources() -> None:

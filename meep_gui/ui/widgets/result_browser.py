@@ -9,6 +9,7 @@ from PyQt5 import QtCore, QtWidgets
 from ...model import RunRecord
 from ...results import ArtifactDisplayEntry, display_entries_from_run_record
 from ...store import ProjectStore
+from ..common import format_run_list_label
 from ..panels.output_artifacts import OutputArtifactsPanel
 from ..panels.output_history import OutputHistoryPanel
 from .result_preview import ResultPreviewWidget
@@ -111,13 +112,7 @@ class ResultBrowserWidget(QtWidgets.QWidget):
         return sanitized or default
 
     def _run_list_label(self, run: RunRecord) -> str:
-        prefix = run.meta.get("sweep_label", "").strip()
-        label = f"{run.analysis_kind} [{run.status}] {run.created_at or run.run_id}"
-        if prefix:
-            label = f"{prefix} | {label}"
-        if run.status == "canceled":
-            label += " (canceled)"
-        return label
+        return format_run_list_label(run)
 
     def _sanitize_run_list_dir_name(self, label: str) -> str:
         text = label.strip()
