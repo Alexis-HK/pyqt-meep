@@ -23,3 +23,4 @@ def test_full_application_windows_instantiate_offscreen(qtbot) -> None:
     assert workflow.centralWidget().count() == 9
     assert output.run_list.count() == 0
     assert domain.preview is not None
+    assert domain.export_preview_button.text() == "Export Preview"

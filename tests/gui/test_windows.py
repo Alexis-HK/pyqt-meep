@@ -29,6 +29,7 @@ from meep_gui.model import (
 )
 from meep_gui.script import generate_script
 from meep_gui.store import ProjectStore
+import meep_gui.preview.domain as domain_preview_module
 from meep_gui.ui.panels.field_animation import FieldAnimationPanel
 from meep_gui.ui.dialogs.symmetry import SymmetryEditDialog
 from meep_gui.ui.panels.frequency_domain import FrequencyDomainPanel
@@ -44,7 +45,7 @@ from meep_gui.ui.tabs.flux_monitors import FluxMonitorsTab
 from meep_gui.ui.tabs.parameters import ParametersTab
 from meep_gui.ui.tabs.sweep import SweepTab
 import meep_gui.ui.tabs.sweep as sweep_tab_module
-from meep_gui.ui.windows import OutputWindow
+from meep_gui.ui.windows import DomainWindow, OutputWindow
 
 
 def test_analysis_tab_run_and_result_record(qtbot, monkeypatch) -> None:
@@ -976,6 +977,75 @@ def test_sweep_tab_preserves_selection_on_update_and_remove(qtbot) -> None:
     qtbot.waitUntil(lambda: len(store.state.sweep.params) == 0, timeout=3000)
     assert not tab.update_button.isEnabled()
     assert not tab.remove_button.isEnabled()
+
+
+def test_domain_window_export_preview_writes_png_and_appends_extension(
+    qtbot, monkeypatch, tmp_path
+) -> None:
+    store = ProjectStore()
+    target = tmp_path / "domain_capture"
+
+    monkeypatch.setattr(
+        QtWidgets.QFileDialog,
+        "getSaveFileName",
+        lambda *_args, **_kwargs: (str(target), "PNG Files (*.png)"),
+    )
+
+    monkeypatch.setattr(domain_preview_module, "build_sim", None)
+
+    win = DomainWindow(store)
+    qtbot.addWidget(win)
+    win.show()
+    QtWidgets.QApplication.processEvents()
+
+    qtbot.mouseClick(win.export_preview_button, QtCore.Qt.LeftButton)
+
+    exported = tmp_path / "domain_capture.png"
+    assert exported.exists()
+    assert exported.stat().st_size > 0
+
+
+@pytest.mark.parametrize(
+    ("analysis", "expected"),
+    [
+        (AnalysisConfig(kind="field_animation"), "domain_preview.png"),
+        (
+            AnalysisConfig(
+                kind="transmission_spectrum",
+                transmission_spectrum=TransmissionSpectrumConfig(preview_domain="reference"),
+            ),
+            "domain_preview_reference.png",
+        ),
+        (
+            AnalysisConfig(
+                kind="transmission_spectrum",
+                transmission_spectrum=TransmissionSpectrumConfig(preview_domain="scattering"),
+            ),
+            "domain_preview_scattering.png",
+        ),
+        (AnalysisConfig(kind="mpb_modesolver"), "mpb_unit_cell.png"),
+    ],
+)
+def test_domain_window_export_preview_uses_contextual_default_filename(
+    qtbot, monkeypatch, analysis, expected
+) -> None:
+    store = ProjectStore()
+    store.state.analysis = analysis
+    captured: list[str] = []
+
+    def _fake_get_save_file_name(_parent, _title, default_name, _filter):
+        captured.append(default_name)
+        return ("", "")
+
+    monkeypatch.setattr(QtWidgets.QFileDialog, "getSaveFileName", _fake_get_save_file_name)
+    monkeypatch.setattr(domain_preview_module.DomainPreviewWidget, "update_from_state", lambda self, state: [])
+
+    win = DomainWindow(store)
+    qtbot.addWidget(win)
+
+    qtbot.mouseClick(win.export_preview_button, QtCore.Qt.LeftButton)
+
+    assert captured == [expected]
 
 
 def test_analysis_tab_blocks_frequency_domain_run_with_gaussian_source(qtbot, monkeypatch) -> None:

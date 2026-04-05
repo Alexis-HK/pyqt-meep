@@ -82,6 +82,14 @@ class DomainPreviewWidget(FigureCanvas):
         super().__init__(fig)
         self.setParent(parent)
 
+    def export_png(self, path: str) -> None:
+        self.draw()
+        pixmap = self.grab()
+        if pixmap.isNull():
+            raise RuntimeError("Preview capture failed.")
+        if not pixmap.save(path, "PNG"):
+            raise RuntimeError(f"Failed to save preview PNG to {path}.")
+
     def update_from_state(self, state: ProjectState) -> list[RenderIssue]:
         issues: list[RenderIssue] = []
         ax = self._ax
