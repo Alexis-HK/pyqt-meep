@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyqt-meep"
+version = "0.1.0"
+description = "PyQt GUI for Meep and MPB workflows"
+requires-python = ">=3.12"
+
+[project.scripts]
+meep-gui = "meep_gui.app:main"
+
+[tool.setuptools.packages.find]
+include = ["meep_gui*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

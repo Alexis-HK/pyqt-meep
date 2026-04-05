@@ -12,9 +12,8 @@ from .simulation import (
 )
 
 
-def emit_transmission(lines: list[str], state) -> None:
+def emit_transmission(lines: list[str], state, scattering_scene, reference_scene) -> None:
     cfg = state.analysis.transmission_spectrum
-    ref_state = cfg.reference_state
     output_prefix = cfg.output_prefix.strip() or "transmission"
     reuse_csv_name = os.path.basename(
         (cfg.reuse_reference_csv_name or "transmission_spectrum.csv").strip()
@@ -71,26 +70,26 @@ def emit_transmission(lines: list[str], state) -> None:
     ):
         line(lines, text)
 
-    emit_geometry(lines, "ref_geometry", ref_state.geometries)
+    emit_geometry(lines, "ref_geometry", reference_scene.objects)
     line(lines)
-    emit_sources(lines, "ref_sources", ref_state.sources)
+    emit_sources(lines, "ref_sources", reference_scene.sources)
     line(lines)
-    emit_boundary_layers(lines, "ref_boundary_layers", ref_state.domain)
+    emit_boundary_layers(lines, "ref_boundary_layers", reference_scene.domain)
     line(lines)
-    emit_symmetries(lines, "ref_symmetries", ref_state.domain)
+    emit_symmetries(lines, "ref_symmetries", reference_scene.symmetries)
     line(lines)
     for text in (
         "sim_ref = mp.Simulation(",
-        f"    cell_size=mp.Vector3({ref_state.domain.cell_x}, {ref_state.domain.cell_y}, 0),",
+        f"    cell_size=mp.Vector3({reference_scene.domain.cell_x_expr}, {reference_scene.domain.cell_y_expr}, 0),",
         "    boundary_layers=ref_boundary_layers,",
         "    geometry=ref_geometry,",
         "    sources=ref_sources,",
         "    symmetries=ref_symmetries,",
-        f"    resolution={ref_state.domain.resolution},",
+        f"    resolution={reference_scene.domain.resolution_expr},",
         ")",
     ):
         line(lines, text)
-    emit_flux_handles(lines, "ref_flux_handles", "sim_ref", ref_state.flux_monitors)
+    emit_flux_handles(lines, "ref_flux_handles", "sim_ref", reference_scene.monitors)
     for text in (
         "if incident_monitor_name not in ref_flux_handles:",
         "    raise ValueError(f\"Incident monitor '{incident_monitor_name}' not found in reference monitors.\")",
@@ -126,22 +125,22 @@ def emit_transmission(lines: list[str], state) -> None:
     ):
         line(lines, text)
 
-    emit_boundary_layers(lines, "dev_boundary_layers", state.domain)
+    emit_boundary_layers(lines, "dev_boundary_layers", scattering_scene.domain)
     line(lines)
-    emit_symmetries(lines, "dev_symmetries", state.domain)
+    emit_symmetries(lines, "dev_symmetries", scattering_scene.symmetries)
     line(lines)
     for text in (
         "sim_dev = mp.Simulation(",
-        f"    cell_size=mp.Vector3({state.domain.cell_x}, {state.domain.cell_y}, 0),",
+        f"    cell_size=mp.Vector3({scattering_scene.domain.cell_x_expr}, {scattering_scene.domain.cell_y_expr}, 0),",
         "    boundary_layers=dev_boundary_layers,",
         "    geometry=geometry,",
         "    sources=sources,",
         "    symmetries=dev_symmetries,",
-        f"    resolution={state.domain.resolution},",
+        f"    resolution={scattering_scene.domain.resolution_expr},",
         ")",
     ):
         line(lines, text)
-    emit_flux_handles(lines, "dev_flux_handles", "sim_dev", state.flux_monitors)
+    emit_flux_handles(lines, "dev_flux_handles", "sim_dev", scattering_scene.monitors)
     for text in (
         "if trans_monitor_name not in dev_flux_handles:",
         "    raise ValueError(f\"Transmission monitor '{trans_monitor_name}' not found in scattering monitors.\")",

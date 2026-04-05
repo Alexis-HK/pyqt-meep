@@ -8,13 +8,12 @@ from matplotlib.figure import Figure
 from matplotlib.patches import Rectangle
 
 from ..model import ProjectState
+from ..scene import compile_project_scene, scene_to_sim_params
 from ..validation import evaluate_numeric_expression, evaluate_parameters
 
 try:
     from ..sim import build_sim
-    from ..specs import build_sim_params
 except Exception:  # pragma: no cover - UI can still load
-    build_sim_params = None  # type: ignore[assignment]
     build_sim = None  # type: ignore[assignment]
 
 
@@ -108,14 +107,15 @@ class DomainPreviewWidget(FigureCanvas):
         values: dict[str, float],
         issues: list[RenderIssue],
     ) -> None:
-        if build_sim_params is None or build_sim is None:
+        if build_sim is None:
             issues.append(RenderIssue("Meep preview unavailable: simulation builders are not available."))
             ax.text(0.5, 0.5, "Meep preview unavailable", transform=ax.transAxes, ha="center", va="center")
             return
 
         preview_state = _state_for_meep_preview(state)
         try:
-            params = build_sim_params(preview_state)
+            compiled = compile_project_scene(preview_state)
+            params = scene_to_sim_params(compiled.scene, compiled.context)
             params.symmetries = []
             sim = build_sim(params, lambda _msg: None)
             sim.plot2D(ax=ax)
@@ -125,12 +125,24 @@ class DomainPreviewWidget(FigureCanvas):
             return
 
         # Overlay flux monitor regions so monitor placements remain visible.
-        for monitor in preview_state.flux_monitors:
+        for monitor in compiled.scene.monitors:
             try:
-                cx = evaluate_numeric_expression(monitor.center_x, values)
-                cy = evaluate_numeric_expression(monitor.center_y, values)
-                sx = evaluate_numeric_expression(monitor.size_x, values)
-                sy = evaluate_numeric_expression(monitor.size_y, values)
+                cx = evaluate_numeric_expression(
+                    monitor.center_x_expr,
+                    compiled.context.parameter_values,
+                )
+                cy = evaluate_numeric_expression(
+                    monitor.center_y_expr,
+                    compiled.context.parameter_values,
+                )
+                sx = evaluate_numeric_expression(
+                    monitor.size_x_expr,
+                    compiled.context.parameter_values,
+                )
+                sy = evaluate_numeric_expression(
+                    monitor.size_y_expr,
+                    compiled.context.parameter_values,
+                )
             except ValueError as exc:
                 issues.append(RenderIssue(f"Flux monitor '{monitor.name}': {exc}"))
                 continue
@@ -187,9 +199,10 @@ class DomainPreviewWidget(FigureCanvas):
         except Exception as exc:
             issues.append(RenderIssue(f"MPB preview import failed: {exc}"))
             ax.text(
-                0,
-                0,
+                0.5,
+                0.5,
                 "MPB preview unavailable",
+                transform=ax.transAxes,
                 ha="center",
                 va="center",
                 fontsize=10,
@@ -213,50 +226,34 @@ class DomainPreviewWidget(FigureCanvas):
             ax.text(0.5, 0.5, str(exc), transform=ax.transAxes, ha="center", va="center")
             return
 
-        materials: dict[str, float] = {}
-        for mat in state.materials:
-            if not mat.name:
-                continue
-            try:
-                idx = evaluate_numeric_expression(mat.index_expr, values)
-            except ValueError as exc:
-                issues.append(RenderIssue(f"Material '{mat.name}': {exc}"))
-                continue
-            materials[mat.name] = idx
+        try:
+            compiled = compile_project_scene(state)
+            params = scene_to_sim_params(compiled.scene, compiled.context)
+        except Exception as exc:
+            issues.append(RenderIssue(f"MPB preview scene: {exc}"))
+            ax.text(0.5, 0.5, str(exc), transform=ax.transAxes, ha="center", va="center")
+            return
 
         geometry = []
-        for geo in state.geometries:
-            if geo.material not in materials:
-                issues.append(RenderIssue(f"Geometry '{geo.name}': unknown material '{geo.material}'"))
-                continue
-            mat = mp.Medium(index=materials[geo.material])
-            try:
-                if geo.kind == "block":
-                    size_x = evaluate_numeric_expression(geo.props.get("size_x", "0"), values)
-                    size_y = evaluate_numeric_expression(geo.props.get("size_y", "0"), values)
-                    center_x = evaluate_numeric_expression(geo.props.get("center_x", "0"), values)
-                    center_y = evaluate_numeric_expression(geo.props.get("center_y", "0"), values)
-                    geometry.append(
-                        mp.Block(
-                            size=mp.Vector3(size_x, size_y, mp.inf),
-                            center=mp.Vector3(center_x, center_y),
-                            material=mat,
-                        )
+        for shape in params.shapes:
+            material = mp.Medium(epsilon=shape.eps)
+            if shape.kind == "rect":
+                geometry.append(
+                    mp.Block(
+                        size=mp.Vector3(shape.size_x, shape.size_y, mp.inf),
+                        center=mp.Vector3(shape.center_x, shape.center_y),
+                        material=material,
                     )
-                elif geo.kind == "circle":
-                    radius = evaluate_numeric_expression(geo.props.get("radius", "0"), values)
-                    center_x = evaluate_numeric_expression(geo.props.get("center_x", "0"), values)
-                    center_y = evaluate_numeric_expression(geo.props.get("center_y", "0"), values)
-                    geometry.append(
-                        mp.Cylinder(
-                            radius=radius,
-                            height=mp.inf,
-                            center=mp.Vector3(center_x, center_y),
-                            material=mat,
-                        )
+                )
+            elif shape.kind == "circle":
+                geometry.append(
+                    mp.Cylinder(
+                        radius=shape.radius,
+                        height=mp.inf,
+                        center=mp.Vector3(shape.center_x, shape.center_y),
+                        material=material,
                     )
-            except ValueError as exc:
-                issues.append(RenderIssue(f"Geometry '{geo.name}': {exc}"))
+                )
 
         k_points = []
         if cfg.kpoints:
