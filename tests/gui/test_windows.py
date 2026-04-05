@@ -114,6 +114,188 @@ def test_output_window_export_all_copies_multiple_artifacts_to_folder(qtbot, mon
     assert "b.png" in exported_names
 
 
+def test_output_window_export_all_runs_button_requires_completed_runs(qtbot) -> None:
+    store = ProjectStore()
+    win = OutputWindow(store)
+    qtbot.addWidget(win)
+
+    assert not win.export_all_runs_button.isEnabled()
+
+    store.state.results.append(
+        RunRecord(
+            run_id="failed1",
+            analysis_kind="harminv",
+            status="failed",
+            created_at="2026-02-06T10:00:00",
+            message="failed",
+        )
+    )
+    store.state.results.append(
+        RunRecord(
+            run_id="canceled1",
+            analysis_kind="harminv",
+            status="canceled",
+            created_at="2026-02-06T10:01:00",
+            message="canceled",
+        )
+    )
+    store.result_changed.emit()
+
+    qtbot.waitUntil(lambda: win.run_list.count() == 2, timeout=3000)
+    assert not win.export_all_runs_button.isEnabled()
+
+    store.state.results.append(
+        RunRecord(
+            run_id="completed1",
+            analysis_kind="harminv",
+            status="completed",
+            created_at="2026-02-06T10:02:00",
+            message="done",
+        )
+    )
+    store.result_changed.emit()
+
+    qtbot.waitUntil(lambda: win.run_list.count() == 3, timeout=3000)
+    qtbot.waitUntil(lambda: win.export_all_runs_button.isEnabled(), timeout=3000)
+
+
+def test_output_window_export_all_runs_exports_completed_run_bundle(
+    qtbot, monkeypatch, tmp_path
+) -> None:
+    store = ProjectStore()
+    source_csv = tmp_path / "bundle.csv"
+    source_csv.write_text("x,y\n1,2\n", encoding="utf-8")
+    missing_png = tmp_path / "missing.png"
+
+    store.state.results.extend(
+        [
+            RunRecord(
+                run_id="r1",
+                analysis_kind="transmission_spectrum",
+                status="completed",
+                created_at="2026-02-06T10:00:00",
+                message="done",
+                artifacts=[
+                    ResultArtifact(kind="transmission_csv", label="bundle.csv", path=str(source_csv)),
+                    ResultArtifact(
+                        kind="text",
+                        label="notes",
+                        path="",
+                        meta={"lines": "line one\nline two"},
+                    ),
+                ],
+            ),
+            RunRecord(
+                run_id="r2",
+                analysis_kind="harminv",
+                status="completed",
+                created_at="2026-02-06T10:01:00",
+                message="done",
+                artifacts=[
+                    ResultArtifact(kind="plot_png", label="missing.png", path=str(missing_png)),
+                ],
+            ),
+            RunRecord(
+                run_id="r3",
+                analysis_kind="frequency_domain_solver",
+                status="failed",
+                created_at="2026-02-06T10:02:00",
+                message="failed",
+                artifacts=[
+                    ResultArtifact(kind="frequency_domain_field_csv", label="ignored.csv", path=str(source_csv)),
+                ],
+            ),
+            RunRecord(
+                run_id="r4",
+                analysis_kind="meep_k_points",
+                status="canceled",
+                created_at="2026-02-06T10:03:00",
+                message="canceled",
+                artifacts=[
+                    ResultArtifact(kind="text", label="ignored", path="", meta={"lines": "skip me"}),
+                ],
+            ),
+        ]
+    )
+
+    export_parent = tmp_path / "exports"
+    export_parent.mkdir()
+    monkeypatch.setattr(
+        QtWidgets.QFileDialog,
+        "getExistingDirectory",
+        lambda *_args, **_kwargs: str(export_parent),
+    )
+
+    win = OutputWindow(store)
+    qtbot.addWidget(win)
+    store.result_changed.emit()
+
+    qtbot.waitUntil(lambda: win.run_list.count() == 4, timeout=3000)
+    qtbot.waitUntil(lambda: win.export_all_runs_button.isEnabled(), timeout=3000)
+
+    qtbot.mouseClick(win.export_all_runs_button, QtCore.Qt.LeftButton)
+
+    bundle_dir = export_parent / "all_runs"
+    assert bundle_dir.is_dir()
+
+    run_dirs = {path.name: path for path in bundle_dir.iterdir() if path.is_dir()}
+    assert set(run_dirs) == {"transmission_spectrum_r1", "harminv_r2"}
+
+    exported_names = {path.name for path in run_dirs["transmission_spectrum_r1"].iterdir()}
+    assert exported_names == {"bundle.csv", "notes.txt"}
+    assert (run_dirs["transmission_spectrum_r1"] / "notes.txt").read_text(encoding="utf-8") == (
+        "line one\nline two\n"
+    )
+    assert list(run_dirs["harminv_r2"].iterdir()) == []
+
+    assert any(
+        "Exported 2 completed runs (2 artifacts)" in message
+        and "1 artifacts were skipped or missing" in message
+        for message in store.log_history
+    )
+
+
+def test_output_window_export_all_runs_uses_unique_bundle_name_on_collision(
+    qtbot, monkeypatch, tmp_path
+) -> None:
+    store = ProjectStore()
+    store.state.results.append(
+        RunRecord(
+            run_id="r1",
+            analysis_kind="harminv",
+            status="completed",
+            created_at="2026-02-06T10:00:00",
+            message="done",
+            artifacts=[
+                ResultArtifact(kind="text", label="summary", path="", meta={"lines": "hello"}),
+            ],
+        )
+    )
+
+    export_parent = tmp_path / "exports"
+    export_parent.mkdir()
+    (export_parent / "all_runs").mkdir()
+    monkeypatch.setattr(
+        QtWidgets.QFileDialog,
+        "getExistingDirectory",
+        lambda *_args, **_kwargs: str(export_parent),
+    )
+
+    win = OutputWindow(store)
+    qtbot.addWidget(win)
+    store.result_changed.emit()
+
+    qtbot.waitUntil(lambda: win.export_all_runs_button.isEnabled(), timeout=3000)
+    qtbot.mouseClick(win.export_all_runs_button, QtCore.Qt.LeftButton)
+
+    created_bundle = export_parent / "all_runs_2"
+    assert created_bundle.is_dir()
+    run_dirs = [path for path in created_bundle.iterdir() if path.is_dir()]
+    assert len(run_dirs) == 1
+    assert run_dirs[0].name == "harminv_r1"
+    assert (run_dirs[0] / "summary.txt").read_text(encoding="utf-8") == "hello\n"
+
+
 def test_output_window_clears_preview_after_last_run_removed(qtbot) -> None:
     store = ProjectStore()
     store.state.results.append(

@@ -13,7 +13,7 @@ class OutputWindow(QuitOnCloseWindow):
         self.browser = ResultBrowserWidget(store, self)
         self.setCentralWidget(self.browser)
         self.run_list = self.browser.run_list
-        self.run_status = self.browser.run_status
+        self.export_all_runs_button = self.browser.export_all_runs_button
         self.artifact_list = self.browser.artifact_list
         self.export_artifact_button = self.browser.export_artifact_button
         self.export_all_button = self.browser.export_all_button

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 
 from PyQt5 import QtCore, QtWidgets
 
@@ -22,7 +23,7 @@ class ResultBrowserWidget(QtWidgets.QWidget):
         self.history = OutputHistoryPanel(self)
         self.artifacts = OutputArtifactsPanel(self)
         self.run_list = self.history.run_list
-        self.run_status = self.history.run_status
+        self.export_all_runs_button = self.history.export_all_runs_button
         self.remove_run_button = self.history.remove_run_button
         self.artifact_list = self.artifacts.artifact_list
         self.export_artifact_button = self.artifacts.export_artifact_button
@@ -39,6 +40,7 @@ class ResultBrowserWidget(QtWidgets.QWidget):
         self.artifact_list.currentRowChanged.connect(self._on_artifact_selected)
         self.export_artifact_button.clicked.connect(self._export_selected_artifact)
         self.export_all_button.clicked.connect(self._export_all_artifacts)
+        self.export_all_runs_button.clicked.connect(self._export_all_runs)
         self.remove_run_button.clicked.connect(self._remove_selected_run)
 
         store.result_changed.connect(self.refresh)
@@ -63,8 +65,8 @@ class ResultBrowserWidget(QtWidgets.QWidget):
             item.setData(QtCore.Qt.UserRole, run.run_id)
             self.run_list.addItem(item)
 
+        self.export_all_runs_button.setDisabled(not self._completed_runs())
         if self.run_list.count() == 0:
-            self.run_status.setText("No runs yet")
             self.artifact_list.clear()
             self._display_artifacts = []
             self._current_run = None
@@ -99,11 +101,72 @@ class ResultBrowserWidget(QtWidgets.QWidget):
             return None
         return self._display_artifacts[row]
 
+    def _completed_runs(self) -> list[RunRecord]:
+        return [run for run in self._store.state.results if run.status == "completed"]
+
     def _is_exportable_artifact(self, artifact: ArtifactDisplayEntry) -> bool:
         return bool((artifact.path and os.path.exists(artifact.path)) or artifact.text)
 
     def _exportable_artifacts(self) -> list[ArtifactDisplayEntry]:
         return [item for item in self._display_artifacts if self._is_exportable_artifact(item)]
+
+    def _sanitize_name(self, value: str, default: str, *, allow_dot: bool = False) -> str:
+        allowed = "-_." if allow_dot else "-_"
+        sanitized = "".join(ch if ch.isalnum() or ch in allowed else "_" for ch in value.strip())
+        return sanitized or default
+
+    def _unique_path(self, path: str) -> str:
+        stem, ext = os.path.splitext(path)
+        candidate = path
+        idx = 2
+        while os.path.exists(candidate):
+            candidate = f"{stem}_{idx}{ext}"
+            idx += 1
+        return candidate
+
+    def _run_export_dir_name(self, run: RunRecord) -> str:
+        safe_kind = self._sanitize_name(run.analysis_kind, "analysis")
+        safe_run = self._sanitize_name(run.run_id, "run")
+        return f"{safe_kind}_{safe_run}"
+
+    def _artifact_export_filename(self, artifact: ArtifactDisplayEntry) -> str:
+        label = artifact.export_name.strip() or artifact.label.strip() or "artifact"
+        safe_label = self._sanitize_name(label, "artifact.txt", allow_dot=True)
+        if "." not in safe_label:
+            safe_label += ".txt"
+        return safe_label
+
+    def _export_artifact_to_dir(self, artifact: ArtifactDisplayEntry, out_dir: str) -> None:
+        if artifact.path and os.path.exists(artifact.path):
+            out_path = self._unique_path(os.path.join(out_dir, os.path.basename(artifact.path)))
+            shutil.copyfile(artifact.path, out_path)
+            return
+        if artifact.text:
+            out_path = self._unique_path(
+                os.path.join(out_dir, self._artifact_export_filename(artifact))
+            )
+            with open(out_path, "w", encoding="utf-8") as handle:
+                handle.write(artifact.text + "\n")
+            return
+        raise RuntimeError("Artifact source is missing.")
+
+    def _export_artifacts_to_dir(
+        self,
+        artifacts: list[ArtifactDisplayEntry],
+        out_dir: str,
+    ) -> tuple[int, int]:
+        exported = 0
+        skipped = 0
+        for artifact in artifacts:
+            if not self._is_exportable_artifact(artifact):
+                skipped += 1
+                continue
+            try:
+                self._export_artifact_to_dir(artifact, out_dir)
+                exported += 1
+            except Exception:
+                skipped += 1
+        return exported, skipped
 
     def _on_run_selected(self, _row: int) -> None:
         run = self._selected_run()
@@ -113,13 +176,11 @@ class ResultBrowserWidget(QtWidgets.QWidget):
         self.export_artifact_button.setDisabled(True)
         self.export_all_button.setDisabled(True)
         if run is None:
-            self.run_status.setText("No run selected")
             self.remove_run_button.setDisabled(True)
             self.preview.clear_preview()
             return
 
         self.remove_run_button.setDisabled(False)
-        self.run_status.setText(f"Status: {run.status} | {run.message or 'No message'}")
         self._display_artifacts = list(display_entries_from_run_record(run))
         for idx, artifact in enumerate(self._display_artifacts):
             text = artifact.list_label
@@ -157,8 +218,6 @@ class ResultBrowserWidget(QtWidgets.QWidget):
             return
         try:
             if path and os.path.exists(path):
-                import shutil
-
                 shutil.copyfile(path, out_path)
             elif text:
                 with open(out_path, "w", encoding="utf-8") as handle:
@@ -181,54 +240,49 @@ class ResultBrowserWidget(QtWidgets.QWidget):
         if not parent_dir:
             return
 
-        safe_kind = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in run.analysis_kind) or "analysis"
-        safe_run = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in run.run_id) or "run"
-        base_dir = os.path.join(parent_dir, f"{safe_kind}_{safe_run}")
-        out_dir = base_dir
-        suffix = 2
-        while os.path.exists(out_dir):
-            out_dir = f"{base_dir}_{suffix}"
-            suffix += 1
+        out_dir = self._unique_path(os.path.join(parent_dir, self._run_export_dir_name(run)))
         os.makedirs(out_dir, exist_ok=True)
+        copied, skipped = self._export_artifacts_to_dir(self._display_artifacts, out_dir)
 
-        def unique_dest(path: str) -> str:
-            stem, ext = os.path.splitext(path)
-            candidate = path
-            idx = 2
-            while os.path.exists(candidate):
-                candidate = f"{stem}_{idx}{ext}"
-                idx += 1
-            return candidate
-
-        copied = 0
-        failed = 0
-        for artifact in exportable:
-            try:
-                src = artifact.path
-                text = artifact.text
-                label = artifact.export_name.strip() or artifact.label.strip() or "artifact"
-                if src and os.path.exists(src):
-                    import shutil
-
-                    shutil.copyfile(src, unique_dest(os.path.join(out_dir, os.path.basename(src))))
-                    copied += 1
-                elif text:
-                    safe_label = "".join(ch if ch.isalnum() or ch in "-_." else "_" for ch in label)
-                    safe_label = safe_label or "artifact.txt"
-                    if "." not in safe_label:
-                        safe_label += ".txt"
-                    with open(unique_dest(os.path.join(out_dir, safe_label)), "w", encoding="utf-8") as handle:
-                        handle.write(text + "\n")
-                    copied += 1
-                else:
-                    failed += 1
-            except Exception:
-                failed += 1
-
-        if failed:
-            self._store.log_message(f"Exported {copied} artifacts to {out_dir}; {failed} could not be exported.")
+        if skipped:
+            self._store.log_message(
+                f"Exported {copied} artifacts to {out_dir}; {skipped} were skipped or missing."
+            )
         else:
             self._store.log_message(f"Exported {copied} artifacts to {out_dir}")
+
+    def _export_all_runs(self) -> None:
+        completed_runs = self._completed_runs()
+        if not completed_runs:
+            self._store.log_message(
+                "Export All Runs is only available when at least one completed run exists."
+            )
+            return
+
+        parent_dir = QtWidgets.QFileDialog.getExistingDirectory(self, "Select Export Folder")
+        if not parent_dir:
+            return
+
+        bundle_dir = self._unique_path(os.path.join(parent_dir, "all_runs"))
+        os.makedirs(bundle_dir, exist_ok=True)
+
+        total_exported = 0
+        total_skipped = 0
+        for run in completed_runs:
+            run_dir = self._unique_path(os.path.join(bundle_dir, self._run_export_dir_name(run)))
+            os.makedirs(run_dir, exist_ok=True)
+            artifacts = list(display_entries_from_run_record(run))
+            exported, skipped = self._export_artifacts_to_dir(artifacts, run_dir)
+            total_exported += exported
+            total_skipped += skipped
+
+        message = (
+            f"Exported {len(completed_runs)} completed runs ({total_exported} artifacts) "
+            f"to {bundle_dir}"
+        )
+        if total_skipped:
+            message += f"; {total_skipped} artifacts were skipped or missing."
+        self._store.log_message(message)
 
     def _remove_selected_run(self) -> None:
         row = self.run_list.currentRow()
