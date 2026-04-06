@@ -400,9 +400,21 @@ def test_sweep_tab_removes_limit_controls_and_uses_step_size_label(qtbot) -> Non
     assert "Enable sweep" in checkbox_texts
     assert "Allow points above max" not in checkbox_texts
 
+    assert not tab.enabled.isChecked()
+    assert not tab.table.isEnabled()
+    assert not tab.add_button.isEnabled()
+    assert not tab.update_button.isEnabled()
+    assert not tab.remove_button.isEnabled()
+
     label_texts = {label.text() for label in tab.findChildren(QtWidgets.QLabel)}
     assert "Step Size" in label_texts
     assert "Max Points" not in label_texts
+
+    tab.enabled.setChecked(True)
+    assert tab.table.isEnabled()
+    assert tab.add_button.isEnabled()
+    assert not tab.update_button.isEnabled()
+    assert not tab.remove_button.isEnabled()
 
 
 def test_analysis_tab_publishes_sweep_results_incrementally_to_output_window(qtbot, monkeypatch) -> None:

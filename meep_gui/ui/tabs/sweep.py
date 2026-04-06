@@ -83,10 +83,13 @@ class SweepTab(QtWidgets.QWidget):
         self.param_name.blockSignals(False)
 
     def _update_buttons(self) -> None:
+        enabled = self.enabled.isChecked()
+        self.table.setEnabled(enabled)
+        self.add_button.setEnabled(enabled)
         row = self._current_row()
-        can_edit = 0 <= row < len(self.store.state.sweep.params)
-        self.update_button.setDisabled(not can_edit)
-        self.remove_button.setDisabled(not can_edit)
+        can_edit = enabled and 0 <= row < len(self.store.state.sweep.params)
+        self.update_button.setEnabled(can_edit)
+        self.remove_button.setEnabled(can_edit)
 
     def _validate_param(self, row: int) -> bool:
         name = self.param_name.currentText().strip()
@@ -120,6 +123,7 @@ class SweepTab(QtWidgets.QWidget):
             enabled=self.enabled.isChecked(),
             params=list(sweep.params),
         )
+        self._update_buttons()
         self.store.notify()
 
     def _build_param(self) -> SweepParameter:
