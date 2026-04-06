@@ -35,17 +35,18 @@ def run_sim(
     components = component_map(mp)
     canceled = False
 
-    def log_step(sim_inst):
+    def check_stop(sim_inst):
         nonlocal canceled
-        t = sim_inst.meep_time()
-        log(f"t = {t:.2f}")
-        if stop_flag and stop_flag():
-            canceled = True
-            log("Stop requested. Finishing early...")
-            if hasattr(sim_inst, "abort"):
-                sim_inst.abort()
+        if canceled or stop_flag is None or not stop_flag():
+            return
+        canceled = True
+        log("Stop requested. Finishing early...")
+        if hasattr(sim_inst, "abort"):
+            sim_inst.abort()
 
-    callbacks = [mp.at_every(10, log_step)]
+    callbacks: list[object] = []
+    if stop_flag is not None:
+        callbacks.append(mp.at_every(10, check_stop))
     if step_funcs:
         callbacks.extend(step_funcs)
 
