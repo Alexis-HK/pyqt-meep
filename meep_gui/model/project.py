@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from ..primitives import geometry_kind, source_kind
 from .analysis import (
@@ -8,7 +8,6 @@ from .analysis import (
     FrequencyDomainSolverConfig,
     MpbModeSolverConfig,
     SweepConfig,
-    TransmissionSpectrumConfig,
 )
 from .constants import FIELD_COMPONENTS, RUN_STATUS_VALUES
 from .domain import Domain, normalize_domain
@@ -42,60 +41,30 @@ class ProjectState:
             self.analysis = AnalysisConfig()
         elif self.analysis.transmission_spectrum.preview_domain not in {"scattering", "reference"}:
             tx = self.analysis.transmission_spectrum
-            self.analysis = AnalysisConfig(
-                kind=self.analysis.kind,
-                field_animation=self.analysis.field_animation,
-                harminv=self.analysis.harminv,
-                transmission_spectrum=TransmissionSpectrumConfig(
-                    incident_monitor=tx.incident_monitor,
-                    transmission_monitor=tx.transmission_monitor,
-                    reflection_monitor=tx.reflection_monitor,
-                    reference_reflection_monitor=tx.reference_reflection_monitor,
-                    until_after_sources=tx.until_after_sources,
-                    animate_reference=tx.animate_reference,
-                    animate_scattering=tx.animate_scattering,
-                    animation_component=tx.animation_component,
-                    animation_interval=tx.animation_interval,
-                    animation_fps=tx.animation_fps,
-                    output_dir=tx.output_dir,
-                    output_prefix=tx.output_prefix,
-                    reuse_reference_run_id=tx.reuse_reference_run_id,
-                    reuse_reference_csv_name=tx.reuse_reference_csv_name,
-                    preview_domain="scattering",
-                    reference_state=tx.reference_state,
-                ),
-                frequency_domain_solver=self.analysis.frequency_domain_solver,
-                meep_k_points=self.analysis.meep_k_points,
-                mpb_modesolver=self.analysis.mpb_modesolver,
+            self.analysis = replace(
+                self.analysis,
+                transmission_spectrum=replace(tx, preview_domain="scattering"),
             )
 
         tx = self.analysis.transmission_spectrum
+        if tx.stop_condition not in {"until_after_sources", "field_decay"}:
+            self.analysis = replace(
+                self.analysis,
+                transmission_spectrum=replace(tx, stop_condition="until_after_sources"),
+            )
+            tx = self.analysis.transmission_spectrum
+
+        if tx.field_decay_component not in FIELD_COMPONENTS:
+            self.analysis = replace(
+                self.analysis,
+                transmission_spectrum=replace(tx, field_decay_component="Ez"),
+            )
+            tx = self.analysis.transmission_spectrum
+
         if tx.animation_component not in FIELD_COMPONENTS:
-            self.analysis = AnalysisConfig(
-                kind=self.analysis.kind,
-                field_animation=self.analysis.field_animation,
-                harminv=self.analysis.harminv,
-                transmission_spectrum=TransmissionSpectrumConfig(
-                    incident_monitor=tx.incident_monitor,
-                    transmission_monitor=tx.transmission_monitor,
-                    reflection_monitor=tx.reflection_monitor,
-                    reference_reflection_monitor=tx.reference_reflection_monitor,
-                    until_after_sources=tx.until_after_sources,
-                    animate_reference=tx.animate_reference,
-                    animate_scattering=tx.animate_scattering,
-                    animation_component="Ez",
-                    animation_interval=tx.animation_interval,
-                    animation_fps=tx.animation_fps,
-                    output_dir=tx.output_dir,
-                    output_prefix=tx.output_prefix,
-                    reuse_reference_run_id=tx.reuse_reference_run_id,
-                    reuse_reference_csv_name=tx.reuse_reference_csv_name,
-                    preview_domain=tx.preview_domain,
-                    reference_state=tx.reference_state,
-                ),
-                frequency_domain_solver=self.analysis.frequency_domain_solver,
-                meep_k_points=self.analysis.meep_k_points,
-                mpb_modesolver=self.analysis.mpb_modesolver,
+            self.analysis = replace(
+                self.analysis,
+                transmission_spectrum=replace(tx, animation_component="Ez"),
             )
             tx = self.analysis.transmission_spectrum
 

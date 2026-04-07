@@ -37,7 +37,17 @@ class TransmissionSpectrumConfig:
     transmission_monitor: str = ""
     reflection_monitor: str = ""
     reference_reflection_monitor: str = ""
+    stop_condition: str = "until_after_sources"
     until_after_sources: str = "200"
+    field_decay_component: str = "Ez"
+    reference_field_decay_additional_time: str = "50"
+    reference_field_decay_point_x: str = "0"
+    reference_field_decay_point_y: str = "0"
+    reference_field_decay_by: str = "1e-3"
+    scattering_field_decay_additional_time: str = "50"
+    scattering_field_decay_point_x: str = "0"
+    scattering_field_decay_point_y: str = "0"
+    scattering_field_decay_by: str = "1e-3"
     animate_reference: bool = False
     animate_scattering: bool = False
     animation_component: str = "Ez"

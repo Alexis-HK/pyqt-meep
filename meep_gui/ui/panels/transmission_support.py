@@ -19,6 +19,10 @@ def current_reuse_csv_name(panel) -> str:
     return "transmission_spectrum.csv"
 
 
+def selected_stop_condition(panel) -> str:
+    return str(panel.stop_condition.currentData() or "until_after_sources").strip()
+
+
 def sync_animation_controls(panel) -> None:
     if selected_reuse_run_id(panel) and panel.animate_reference.isChecked():
         panel.animate_reference.blockSignals(True)
@@ -90,14 +94,59 @@ def refresh_reuse_choices(panel) -> None:
         panel._auto_apply()
 
 
+def sync_stop_condition_controls(panel) -> None:
+    if selected_stop_condition(panel) == "field_decay":
+        panel.stop_condition_stack.setCurrentWidget(panel.field_decay_page)
+    else:
+        panel.stop_condition_stack.setCurrentWidget(panel.until_after_sources_page)
+
+
 def validate_panel(panel) -> bool:
     allowed = parameter_names(panel.store)
     ok = True
-    result = validate_numeric_expression(panel.until_after_sources.text().strip(), allowed)
-    _set_invalid(panel.until_after_sources, not result.ok)
-    if not result.ok:
-        _log_error(panel.store, f"Until After Sources: {result.message}", panel)
-        ok = False
+    if selected_stop_condition(panel) == "field_decay":
+        _set_invalid(panel.until_after_sources, False)
+        if panel.field_decay_component.currentText() not in FIELD_COMPONENTS:
+            _set_invalid(panel.field_decay_component, True)
+            _log_error(panel.store, "Field Decay Component is invalid.", panel)
+            ok = False
+        else:
+            _set_invalid(panel.field_decay_component, False)
+        field_decay_fields = (
+            (panel.reference_field_decay_additional_time, "Reference Additional Time"),
+            (panel.reference_field_decay_point_x, "Reference Point X"),
+            (panel.reference_field_decay_point_y, "Reference Point Y"),
+            (panel.reference_field_decay_by, "Reference Decay By"),
+            (panel.scattering_field_decay_additional_time, "Scattering Additional Time"),
+            (panel.scattering_field_decay_point_x, "Scattering Point X"),
+            (panel.scattering_field_decay_point_y, "Scattering Point Y"),
+            (panel.scattering_field_decay_by, "Scattering Decay By"),
+        )
+        for widget, label in field_decay_fields:
+            result = validate_numeric_expression(widget.text().strip(), allowed)
+            _set_invalid(widget, not result.ok)
+            if not result.ok:
+                _log_error(panel.store, f"{label}: {result.message}", panel)
+                ok = False
+    else:
+        result = validate_numeric_expression(panel.until_after_sources.text().strip(), allowed)
+        _set_invalid(panel.until_after_sources, not result.ok)
+        if not result.ok:
+            _log_error(panel.store, f"Until After Sources: {result.message}", panel)
+            ok = False
+        _set_invalid(panel.field_decay_component, False)
+        for widget in (
+            panel.reference_field_decay_additional_time,
+            panel.reference_field_decay_point_x,
+            panel.reference_field_decay_point_y,
+            panel.reference_field_decay_by,
+            panel.scattering_field_decay_additional_time,
+            panel.scattering_field_decay_point_x,
+            panel.scattering_field_decay_point_y,
+            panel.scattering_field_decay_by,
+        ):
+            _set_invalid(widget, False)
+
     anim_enabled = panel.animate_reference.isChecked() or panel.animate_scattering.isChecked()
     if anim_enabled:
         for widget, label in (

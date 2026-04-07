@@ -20,6 +20,56 @@ from .types import ArtifactResult, CancelFn, LogFn, PlotResult, RunResult
 from .workspace import create_run_output_dir
 
 
+def _build_field_decay_stop_condition(
+    cfg,
+    values: dict[str, float],
+    deps,
+    domain_name: str,
+):
+    mp = deps._import_meep()
+    component = getattr(mp, cfg.field_decay_component, getattr(mp, "Ez", None))
+    if component is None:
+        raise ValueError("Meep field components are unavailable. Check your Meep installation.")
+    prefix = "reference" if domain_name == "reference" else "scattering"
+    additional_time = deps._eval_required(
+        getattr(cfg, f"{prefix}_field_decay_additional_time"),
+        values,
+        f"{prefix}_field_decay_additional_time",
+    )
+    point_x = deps._eval_required(
+        getattr(cfg, f"{prefix}_field_decay_point_x"),
+        values,
+        f"{prefix}_field_decay_point_x",
+    )
+    point_y = deps._eval_required(
+        getattr(cfg, f"{prefix}_field_decay_point_y"),
+        values,
+        f"{prefix}_field_decay_point_y",
+    )
+    decay_by = deps._eval_required(
+        getattr(cfg, f"{prefix}_field_decay_by"),
+        values,
+        f"{prefix}_field_decay_by",
+    )
+    return mp.stop_when_fields_decayed(
+        additional_time,
+        component,
+        mp.Vector3(point_x, point_y, 0),
+        decay_by,
+    )
+
+
+def _build_transmission_stop_condition(
+    cfg,
+    values: dict[str, float],
+    deps,
+    domain_name: str,
+):
+    if cfg.stop_condition == "field_decay":
+        return _build_field_decay_stop_condition(cfg, values, deps, domain_name)
+    return deps._eval_required(cfg.until_after_sources, values, "until_after_sources")
+
+
 def run_transmission_spectrum_impl(
     state: ProjectState,
     log: LogFn,
@@ -39,9 +89,6 @@ def run_transmission_spectrum_impl(
         if not result.ok:
             raise ValueError(f"Parameter '{result.name}': {result.message}")
 
-    until_after_sources = deps._eval_required(
-        cfg.until_after_sources, values, "until_after_sources"
-    )
     output_prefix = cfg.output_prefix.strip() or "transmission"
     output_dir_cfg = cfg.output_dir.strip()
     reuse_reference_run_id = cfg.reuse_reference_run_id.strip()
@@ -160,7 +207,12 @@ def run_transmission_spectrum_impl(
         ref_result = deps.run_sim(
             params_reference,
             log,
-            until_after_sources=until_after_sources,
+            until_after_sources=_build_transmission_stop_condition(
+                cfg,
+                values,
+                deps,
+                "reference",
+            ),
             step_funcs=ref_step_funcs,
             stop_flag=cancel_requested,
             flux_monitors=ref_flux_specs,
@@ -200,7 +252,12 @@ def run_transmission_spectrum_impl(
     dev_result = deps.run_sim(
         params_device,
         log,
-        until_after_sources=until_after_sources,
+        until_after_sources=_build_transmission_stop_condition(
+            cfg,
+            values,
+            deps,
+            "scattering",
+        ),
         step_funcs=dev_step_funcs,
         stop_flag=cancel_requested,
         flux_monitors=dev_flux_specs,

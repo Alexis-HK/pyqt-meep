@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import copy
+from dataclasses import replace
 
 from PyQt5 import QtWidgets
 
-from ...model import AnalysisConfig, FIELD_COMPONENTS, TransmissionSpectrumConfig
+from ...model import FIELD_COMPONENTS, TransmissionSpectrumConfig
 from ...store import ProjectStore
 from .transmission_support import (
     current_reuse_csv_name,
     refresh_monitor_choices,
     refresh_reuse_choices,
+    selected_stop_condition,
     selected_reuse_run_id,
     sync_animation_controls,
+    sync_stop_condition_controls,
     validate_panel,
 )
 
@@ -30,7 +33,20 @@ class TransmissionSpectrumPanel(QtWidgets.QWidget):
         self.reuse_reference = QtWidgets.QComboBox()
         self.reflection_monitor.addItem("")
         self.reference_reflection_monitor.addItem("")
+        self.stop_condition = QtWidgets.QComboBox()
+        self.stop_condition.addItem("Until after sources", "until_after_sources")
+        self.stop_condition.addItem("When field decay", "field_decay")
         self.until_after_sources = QtWidgets.QLineEdit()
+        self.field_decay_component = QtWidgets.QComboBox()
+        self.field_decay_component.addItems(list(FIELD_COMPONENTS))
+        self.reference_field_decay_additional_time = QtWidgets.QLineEdit()
+        self.reference_field_decay_point_x = QtWidgets.QLineEdit()
+        self.reference_field_decay_point_y = QtWidgets.QLineEdit()
+        self.reference_field_decay_by = QtWidgets.QLineEdit()
+        self.scattering_field_decay_additional_time = QtWidgets.QLineEdit()
+        self.scattering_field_decay_point_x = QtWidgets.QLineEdit()
+        self.scattering_field_decay_point_y = QtWidgets.QLineEdit()
+        self.scattering_field_decay_by = QtWidgets.QLineEdit()
         self.animate_reference = QtWidgets.QCheckBox("Reference")
         self.animate_scattering = QtWidgets.QCheckBox("Scattering")
         self.animation_component = QtWidgets.QComboBox()
@@ -46,13 +62,58 @@ class TransmissionSpectrumPanel(QtWidgets.QWidget):
         form.addRow("Reference Reflection (optional)", self.reference_reflection_monitor)
         form.addRow("Reflection Monitor (optional)", self.reflection_monitor)
         form.addRow("Reuse Reference Data (optional)", self.reuse_reference)
-        form.addRow("Until After Sources", self.until_after_sources)
+        form.addRow("Stop Condition", self.stop_condition)
         animate_row = QtWidgets.QHBoxLayout()
         animate_row.addWidget(self.animate_reference)
         animate_row.addWidget(self.animate_scattering)
         animate_row.addStretch(1)
-        form.addRow("Animations", animate_row)
-        form.addRow("Domain Preview", self.preview_domain)
+        extra_form = QtWidgets.QFormLayout()
+        extra_form.addRow("Animations", animate_row)
+        extra_form.addRow("Domain Preview", self.preview_domain)
+
+        self.stop_condition_stack = QtWidgets.QStackedWidget()
+
+        self.until_after_sources_page = QtWidgets.QWidget()
+        until_form = QtWidgets.QFormLayout(self.until_after_sources_page)
+        until_form.addRow("Until After Sources", self.until_after_sources)
+
+        self.field_decay_page = QtWidgets.QWidget()
+        field_decay_layout = QtWidgets.QVBoxLayout(self.field_decay_page)
+        field_decay_form = QtWidgets.QFormLayout()
+        field_decay_form.addRow("Field Component", self.field_decay_component)
+        field_decay_layout.addLayout(field_decay_form)
+        field_decay_grid = QtWidgets.QGridLayout()
+        field_decay_grid.addWidget(QtWidgets.QLabel(""), 0, 0)
+        field_decay_grid.addWidget(QtWidgets.QLabel("Reference"), 0, 1)
+        field_decay_grid.addWidget(QtWidgets.QLabel("Scattering"), 0, 2)
+        field_decay_grid.addWidget(QtWidgets.QLabel("Additional Time"), 1, 0)
+        field_decay_grid.addWidget(self.reference_field_decay_additional_time, 1, 1)
+        field_decay_grid.addWidget(self.scattering_field_decay_additional_time, 1, 2)
+        field_decay_grid.addWidget(QtWidgets.QLabel("Point"), 2, 0)
+        field_decay_grid.addWidget(
+            self._make_point_editor(
+                self.reference_field_decay_point_x,
+                self.reference_field_decay_point_y,
+            ),
+            2,
+            1,
+        )
+        field_decay_grid.addWidget(
+            self._make_point_editor(
+                self.scattering_field_decay_point_x,
+                self.scattering_field_decay_point_y,
+            ),
+            2,
+            2,
+        )
+        field_decay_grid.addWidget(QtWidgets.QLabel("Decay By"), 3, 0)
+        field_decay_grid.addWidget(self.reference_field_decay_by, 3, 1)
+        field_decay_grid.addWidget(self.scattering_field_decay_by, 3, 2)
+        field_decay_layout.addLayout(field_decay_grid)
+        field_decay_layout.addStretch(1)
+
+        self.stop_condition_stack.addWidget(self.until_after_sources_page)
+        self.stop_condition_stack.addWidget(self.field_decay_page)
 
         self.animation_box = QtWidgets.QGroupBox("Animation Settings")
         anim_form = QtWidgets.QFormLayout(self.animation_box)
@@ -63,6 +124,8 @@ class TransmissionSpectrumPanel(QtWidgets.QWidget):
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.addLayout(form)
+        layout.addWidget(self.stop_condition_stack)
+        layout.addLayout(extra_form)
         layout.addWidget(self.animation_box)
         layout.addStretch(1)
 
@@ -71,16 +134,41 @@ class TransmissionSpectrumPanel(QtWidgets.QWidget):
         self.reflection_monitor.currentTextChanged.connect(lambda _: self._auto_apply())
         self.reference_reflection_monitor.currentTextChanged.connect(lambda _: self._auto_apply())
         self.reuse_reference.currentIndexChanged.connect(self._on_reuse_selection_changed)
+        self.stop_condition.currentIndexChanged.connect(self._on_stop_condition_changed)
         self.animate_reference.toggled.connect(self._on_animation_toggle)
         self.animate_scattering.toggled.connect(self._on_animation_toggle)
+        self.field_decay_component.currentTextChanged.connect(lambda _: self._auto_apply())
         self.animation_component.currentTextChanged.connect(lambda _: self._auto_apply())
         self.preview_domain.currentTextChanged.connect(self._on_preview_domain_changed)
-        for widget in (self.until_after_sources, self.animation_interval, self.animation_fps):
+        for widget in (
+            self.until_after_sources,
+            self.reference_field_decay_additional_time,
+            self.reference_field_decay_point_x,
+            self.reference_field_decay_point_y,
+            self.reference_field_decay_by,
+            self.scattering_field_decay_additional_time,
+            self.scattering_field_decay_point_x,
+            self.scattering_field_decay_point_y,
+            self.scattering_field_decay_by,
+            self.animation_interval,
+            self.animation_fps,
+        ):
             widget.editingFinished.connect(self._auto_apply)
         self.store.state_changed.connect(self._refresh_monitor_choices)
         self.store.result_changed.connect(self._refresh_reuse_choices)
 
         self._refresh_reuse_choices()
+
+    @staticmethod
+    def _make_point_editor(x_widget: QtWidgets.QLineEdit, y_widget: QtWidgets.QLineEdit) -> QtWidgets.QWidget:
+        editor = QtWidgets.QWidget()
+        row = QtWidgets.QHBoxLayout(editor)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(QtWidgets.QLabel("X"))
+        row.addWidget(x_widget)
+        row.addWidget(QtWidgets.QLabel("Y"))
+        row.addWidget(y_widget)
+        return editor
 
     def _auto_apply(self) -> None:
         if not self._ready:
@@ -94,6 +182,9 @@ class TransmissionSpectrumPanel(QtWidgets.QWidget):
     def _sync_animation_controls(self) -> None:
         sync_animation_controls(self)
 
+    def _sync_stop_condition_controls(self) -> None:
+        sync_stop_condition_controls(self)
+
     def _refresh_monitor_choices(self) -> None:
         refresh_monitor_choices(self)
 
@@ -106,6 +197,10 @@ class TransmissionSpectrumPanel(QtWidgets.QWidget):
             self.animate_reference.setChecked(False)
             self.animate_reference.blockSignals(False)
         sync_animation_controls(self)
+        self._auto_apply()
+
+    def _on_stop_condition_changed(self, _index: int) -> None:
+        self._sync_stop_condition_controls()
         self._auto_apply()
 
     def _on_preview_domain_changed(self, value: str) -> None:
@@ -127,33 +222,12 @@ class TransmissionSpectrumPanel(QtWidgets.QWidget):
                 "Reference monitors initialized from scattering monitors."
             )
 
-        cfg = TransmissionSpectrumConfig(
-            incident_monitor=current_cfg.incident_monitor,
-            transmission_monitor=current_cfg.transmission_monitor,
-            reflection_monitor=current_cfg.reflection_monitor,
-            reference_reflection_monitor=current_cfg.reference_reflection_monitor,
-            until_after_sources=current_cfg.until_after_sources,
-            animate_reference=current_cfg.animate_reference,
-            animate_scattering=current_cfg.animate_scattering,
-            animation_component=current_cfg.animation_component,
-            animation_interval=current_cfg.animation_interval,
-            animation_fps=current_cfg.animation_fps,
-            output_dir=current_cfg.output_dir,
-            output_prefix=current_cfg.output_prefix,
-            reuse_reference_run_id=current_cfg.reuse_reference_run_id,
-            reuse_reference_csv_name=current_cfg.reuse_reference_csv_name,
+        cfg = replace(
+            current_cfg,
             preview_domain=value,
             reference_state=reference_state,
         )
-        self.store.state.analysis = AnalysisConfig(
-            kind=analysis.kind,
-            field_animation=analysis.field_animation,
-            harminv=analysis.harminv,
-            transmission_spectrum=cfg,
-            frequency_domain_solver=analysis.frequency_domain_solver,
-            meep_k_points=analysis.meep_k_points,
-            mpb_modesolver=analysis.mpb_modesolver,
-        )
+        self.store.state.analysis = replace(analysis, transmission_spectrum=cfg)
         self.store.notify()
 
     def load_from_config(self, cfg: TransmissionSpectrumConfig) -> None:
@@ -166,13 +240,25 @@ class TransmissionSpectrumPanel(QtWidgets.QWidget):
         refresh_reuse_choices(self)
         reuse_index = self.reuse_reference.findData(cfg.reuse_reference_run_id)
         self.reuse_reference.setCurrentIndex(reuse_index if reuse_index >= 0 else 0)
+        stop_index = self.stop_condition.findData(cfg.stop_condition)
+        self.stop_condition.setCurrentIndex(stop_index if stop_index >= 0 else 0)
         self.until_after_sources.setText(cfg.until_after_sources)
+        self.field_decay_component.setCurrentText(cfg.field_decay_component)
+        self.reference_field_decay_additional_time.setText(cfg.reference_field_decay_additional_time)
+        self.reference_field_decay_point_x.setText(cfg.reference_field_decay_point_x)
+        self.reference_field_decay_point_y.setText(cfg.reference_field_decay_point_y)
+        self.reference_field_decay_by.setText(cfg.reference_field_decay_by)
+        self.scattering_field_decay_additional_time.setText(cfg.scattering_field_decay_additional_time)
+        self.scattering_field_decay_point_x.setText(cfg.scattering_field_decay_point_x)
+        self.scattering_field_decay_point_y.setText(cfg.scattering_field_decay_point_y)
+        self.scattering_field_decay_by.setText(cfg.scattering_field_decay_by)
         self.animate_reference.setChecked(cfg.animate_reference)
         self.animate_scattering.setChecked(cfg.animate_scattering)
         self.animation_component.setCurrentText(cfg.animation_component)
         self.animation_interval.setText(cfg.animation_interval)
         self.animation_fps.setText(cfg.animation_fps)
         sync_animation_controls(self)
+        sync_stop_condition_controls(self)
         idx = self.preview_domain.findText(cfg.preview_domain)
         if idx >= 0:
             self.preview_domain.setCurrentIndex(idx)
@@ -185,33 +271,33 @@ class TransmissionSpectrumPanel(QtWidgets.QWidget):
         if not self.validate():
             return False
         current_cfg = self.store.state.analysis.transmission_spectrum
-        cfg = TransmissionSpectrumConfig(
+        cfg = replace(
+            current_cfg,
             incident_monitor=self.incident_monitor.currentText().strip(),
             transmission_monitor=self.transmission_monitor.currentText().strip(),
             reflection_monitor=self.reflection_monitor.currentText().strip(),
             reference_reflection_monitor=self.reference_reflection_monitor.currentText().strip(),
+            stop_condition=selected_stop_condition(self),
             until_after_sources=self.until_after_sources.text().strip(),
+            field_decay_component=self.field_decay_component.currentText(),
+            reference_field_decay_additional_time=self.reference_field_decay_additional_time.text().strip(),
+            reference_field_decay_point_x=self.reference_field_decay_point_x.text().strip(),
+            reference_field_decay_point_y=self.reference_field_decay_point_y.text().strip(),
+            reference_field_decay_by=self.reference_field_decay_by.text().strip(),
+            scattering_field_decay_additional_time=self.scattering_field_decay_additional_time.text().strip(),
+            scattering_field_decay_point_x=self.scattering_field_decay_point_x.text().strip(),
+            scattering_field_decay_point_y=self.scattering_field_decay_point_y.text().strip(),
+            scattering_field_decay_by=self.scattering_field_decay_by.text().strip(),
             animate_reference=self.animate_reference.isChecked(),
             animate_scattering=self.animate_scattering.isChecked(),
             animation_component=self.animation_component.currentText(),
             animation_interval=self.animation_interval.text().strip(),
             animation_fps=self.animation_fps.text().strip(),
-            output_dir=current_cfg.output_dir,
-            output_prefix=current_cfg.output_prefix,
             reuse_reference_run_id=selected_reuse_run_id(self),
             reuse_reference_csv_name=current_reuse_csv_name(self),
             preview_domain=self.preview_domain.currentText(),
-            reference_state=current_cfg.reference_state,
         )
         analysis = self.store.state.analysis
-        self.store.state.analysis = AnalysisConfig(
-            kind=analysis.kind,
-            field_animation=analysis.field_animation,
-            harminv=analysis.harminv,
-            transmission_spectrum=cfg,
-            frequency_domain_solver=analysis.frequency_domain_solver,
-            meep_k_points=analysis.meep_k_points,
-            mpb_modesolver=analysis.mpb_modesolver,
-        )
+        self.store.state.analysis = replace(analysis, transmission_spectrum=cfg)
         self.store.notify()
         return True

@@ -38,6 +38,16 @@ def test_absent_new_sections_fixture_keeps_defaults() -> None:
     assert state.sweep.enabled is False
     assert state.analysis.transmission_spectrum.output_prefix == "transmission"
     assert state.analysis.transmission_spectrum.reference_reflection_monitor == ""
+    assert state.analysis.transmission_spectrum.stop_condition == "until_after_sources"
+    assert state.analysis.transmission_spectrum.field_decay_component == "Ez"
+    assert state.analysis.transmission_spectrum.reference_field_decay_additional_time == "50"
+    assert state.analysis.transmission_spectrum.reference_field_decay_point_x == "0"
+    assert state.analysis.transmission_spectrum.reference_field_decay_point_y == "0"
+    assert state.analysis.transmission_spectrum.reference_field_decay_by == "1e-3"
+    assert state.analysis.transmission_spectrum.scattering_field_decay_additional_time == "50"
+    assert state.analysis.transmission_spectrum.scattering_field_decay_point_x == "0"
+    assert state.analysis.transmission_spectrum.scattering_field_decay_point_y == "0"
+    assert state.analysis.transmission_spectrum.scattering_field_decay_by == "1e-3"
     assert state.analysis.transmission_spectrum.animate_reference is False
     assert state.analysis.transmission_spectrum.animate_scattering is False
     assert state.analysis.transmission_spectrum.animation_component == "Ez"

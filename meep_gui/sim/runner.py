@@ -21,7 +21,7 @@ def run_sim(
     params: SimParams,
     log: LogFn,
     until_time: float | None = None,
-    until_after_sources: float | None = None,
+    until_after_sources: object | None = None,
     stop_flag: Callable[[], bool] | None = None,
     step_funcs: list[object] | None = None,
     harminv_spec: HarminvSpec | None = None,

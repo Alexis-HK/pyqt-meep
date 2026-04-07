@@ -204,6 +204,21 @@ def _render_meep_preview(
 
     if preview_state.analysis.kind == "transmission_spectrum":
         mode = preview_domain or state.analysis.transmission_spectrum.preview_domain
+        cfg = preview_state.analysis.transmission_spectrum
+        if cfg.stop_condition == "field_decay":
+            prefix = "reference" if mode == "reference" else "scattering"
+            try:
+                tx = evaluate_numeric_expression(
+                    getattr(cfg, f"{prefix}_field_decay_point_x"),
+                    values,
+                )
+                ty = evaluate_numeric_expression(
+                    getattr(cfg, f"{prefix}_field_decay_point_y"),
+                    values,
+                )
+                ax.plot(tx, ty, marker="x", color="#006400", markersize=7, markeredgewidth=1.6)
+            except ValueError as exc:
+                issues.append(RenderIssue(f"Transmission stop probe: {exc}"))
         suffix = "reference" if mode == "reference" else "scattering"
         ax.set_title(f"Domain Preview ({suffix})")
     else:

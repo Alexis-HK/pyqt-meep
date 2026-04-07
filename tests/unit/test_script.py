@@ -179,13 +179,60 @@ def test_transmission_script_uses_split_reference_and_scattering_state() -> None
     assert "symmetries=dev_symmetries" in code
     assert "dev_domain_preview_out = os.path.join(out_dir, 'domain_preview_scattering.png')" in code
     assert "sim_dev.load_minus_flux_data(dev_flux_handles[refl_monitor_name], minus_flux_data)" in code
+    assert "def _transmission_stop_condition(domain_name):" in code
+    assert "return 200" in code
     assert "ref_anim = mp.Animate2D(fields=anim_component, realtime=False) if animate_ref else None" in code
     assert "dev_anim = mp.Animate2D(fields=anim_component, realtime=False) if animate_dev else None" in code
+    assert "sim_ref.run(*ref_step_funcs, until_after_sources=_transmission_stop_condition('reference'))" in code
+    assert "sim_dev.run(*dev_step_funcs, until_after_sources=_transmission_stop_condition('scattering'))" in code
     assert "if (not use_cached_reference) and ref_anim is not None:" in code
     assert "ref_anim.to_mp4(anim_fps, os.path.join(out_dir, f\"{safe_prefix}_reference.mp4\"))" in code
     assert "dev_anim.to_mp4(anim_fps, os.path.join(out_dir, f\"{safe_prefix}_scattering.mp4\"))" in code
     assert "if len(freqs) != len(ref_freqs):" in code
     assert "if abs(float(f_dev) - float(f_ref)) > 1e-12:" in code
+
+
+def test_transmission_script_emits_per_domain_field_decay_stop_conditions() -> None:
+    state = ProjectState(
+        flux_monitors=[FluxMonitorConfig(name="dev_tx")],
+        analysis=AnalysisConfig(
+            kind="transmission_spectrum",
+            transmission_spectrum=TransmissionSpectrumConfig(
+                incident_monitor="ref_inc",
+                transmission_monitor="dev_tx",
+                stop_condition="field_decay",
+                field_decay_component="Hz",
+                reference_field_decay_additional_time="a + 5",
+                reference_field_decay_point_x="1",
+                reference_field_decay_point_y="2",
+                reference_field_decay_by="1e-4",
+                scattering_field_decay_additional_time="a + 7",
+                scattering_field_decay_point_x="3",
+                scattering_field_decay_point_y="4",
+                scattering_field_decay_by="5e-4",
+                reference_state=TransmissionDomainState(
+                    flux_monitors=[FluxMonitorConfig(name="ref_inc")]
+                ),
+            ),
+        ),
+        parameters=[Parameter(name="a", expr="10")],
+    )
+
+    code = generate_script(state)
+
+    assert "def _transmission_stop_condition(domain_name):" in code
+    assert "return mp.stop_when_fields_decayed(" in code
+    assert "mp.Hz" in code
+    assert "mp.Vector3(1, 2, 0)" in code
+    assert "mp.Vector3(3, 4, 0)" in code
+    assert "a + 5" in code
+    assert "a + 7" in code
+    assert "ref_domain_preview_out = os.path.join(out_dir, 'domain_preview_reference.png')" in code
+    assert "marker_expr=('1', '2')" in code
+    assert "dev_domain_preview_out = os.path.join(out_dir, 'domain_preview_scattering.png')" in code
+    assert "marker_expr=('3', '4')" in code
+    assert "sim_ref.run(*ref_step_funcs, until_after_sources=_transmission_stop_condition('reference'))" in code
+    assert "sim_dev.run(*dev_step_funcs, until_after_sources=_transmission_stop_condition('scattering'))" in code
 
 
 def test_frequency_domain_script_uses_solve_cw_and_omits_flux_exports() -> None:

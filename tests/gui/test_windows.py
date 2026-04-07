@@ -926,6 +926,75 @@ def test_transmission_reuse_dropdown_lists_completed_runs_and_uses_output_labels
     assert cfg.reuse_reference_csv_name == "bad.csv"
 
 
+def test_transmission_panel_field_decay_stop_condition_roundtrips_and_survives_preview_switch(
+    qtbot,
+) -> None:
+    store = ProjectStore()
+    store.state.parameters = [Parameter(name="a", expr="2")]
+    store.state.analysis = AnalysisConfig(
+        kind="transmission_spectrum",
+        transmission_spectrum=TransmissionSpectrumConfig(
+            incident_monitor="ref_inc",
+            transmission_monitor="dev_tx",
+            preview_domain="scattering",
+            reference_state=TransmissionDomainState(
+                flux_monitors=[FluxMonitorConfig(name="ref_inc")],
+            ),
+        ),
+    )
+    store.state.flux_monitors = [FluxMonitorConfig(name="dev_tx")]
+
+    panel = TransmissionSpectrumPanel(store)
+    qtbot.addWidget(panel)
+    panel.load_from_config(store.state.analysis.transmission_spectrum)
+
+    assert panel.stop_condition.currentData() == "until_after_sources"
+    assert panel.stop_condition_stack.currentWidget() is panel.until_after_sources_page
+
+    panel.stop_condition.setCurrentIndex(panel.stop_condition.findData("field_decay"))
+    qtbot.waitUntil(
+        lambda: panel.stop_condition_stack.currentWidget() is panel.field_decay_page,
+        timeout=3000,
+    )
+    panel.field_decay_component.setCurrentText("Hz")
+    panel.reference_field_decay_additional_time.setText("a + 5")
+    panel.reference_field_decay_point_x.setText("1")
+    panel.reference_field_decay_point_y.setText("2")
+    panel.reference_field_decay_by.setText("1e-4")
+    panel.scattering_field_decay_additional_time.setText("a + 7")
+    panel.scattering_field_decay_point_x.setText("3")
+    panel.scattering_field_decay_point_y.setText("4")
+    panel.scattering_field_decay_by.setText("5e-4")
+
+    assert panel.apply()
+    cfg = store.state.analysis.transmission_spectrum
+    assert cfg.stop_condition == "field_decay"
+    assert cfg.field_decay_component == "Hz"
+    assert cfg.reference_field_decay_additional_time == "a + 5"
+    assert cfg.reference_field_decay_point_x == "1"
+    assert cfg.reference_field_decay_point_y == "2"
+    assert cfg.reference_field_decay_by == "1e-4"
+    assert cfg.scattering_field_decay_additional_time == "a + 7"
+    assert cfg.scattering_field_decay_point_x == "3"
+    assert cfg.scattering_field_decay_point_y == "4"
+    assert cfg.scattering_field_decay_by == "5e-4"
+
+    panel.preview_domain.setCurrentText("reference")
+    qtbot.waitUntil(
+        lambda: store.state.analysis.transmission_spectrum.preview_domain == "reference",
+        timeout=3000,
+    )
+    cfg = store.state.analysis.transmission_spectrum
+    assert cfg.stop_condition == "field_decay"
+    assert cfg.field_decay_component == "Hz"
+    assert cfg.reference_field_decay_additional_time == "a + 5"
+    assert cfg.scattering_field_decay_additional_time == "a + 7"
+    assert cfg.reference_field_decay_point_x == "1"
+    assert cfg.scattering_field_decay_point_x == "3"
+    assert cfg.reference_field_decay_by == "1e-4"
+    assert cfg.scattering_field_decay_by == "5e-4"
+
+
 def test_sweep_tab_preserves_selection_on_update_and_remove(qtbot) -> None:
     store = ProjectStore()
     store.state.parameters = [

@@ -27,6 +27,7 @@ from meep_gui.model import (
     Parameter,
     FluxMonitorConfig,
     ProjectState,
+    RunRecord,
     SourceItem,
     SymmetryItem,
     SweepConfig,
@@ -34,6 +35,7 @@ from meep_gui.model import (
     TransmissionDomainState,
     TransmissionSpectrumConfig,
 )
+from meep_gui.preview.domain_render import render_domain_preview_axes
 
 
 def _no_cancel() -> bool:
@@ -255,6 +257,126 @@ def test_transmission_reuse_trusts_cached_reference_and_pairs_by_index(
     assert any("frequency grid differs" in message for message in logs)
 
 
+def test_transmission_field_decay_stop_condition_uses_per_domain_settings(
+    monkeypatch, tmp_path
+) -> None:
+    stop_calls: list[tuple[float, object, object, float]] = []
+    run_calls: list[dict[str, object]] = []
+
+    class _FakeMeep:
+        Hz = object()
+        Ez = object()
+
+        @staticmethod
+        def Vector3(x=0.0, y=0.0, z=0.0):
+            return ("Vector3", x, y, z)
+
+        @staticmethod
+        def stop_when_fields_decayed(additional_time, component, point, decay_by):
+            token = object()
+            stop_calls.append((additional_time, component, point, decay_by))
+            return token
+
+    def _fake_export_transmission_outputs(**_kwargs):
+        return (
+            ArtifactResult(kind="transmission_csv", label="out.csv", path=str(tmp_path / "out.csv")),
+            PlotResult(
+                title="Transmission Spectrum",
+                x_label="Frequency",
+                y_label="Normalized Response",
+                csv_path=str(tmp_path / "out.csv"),
+                png_path=str(tmp_path / "out.png"),
+            ),
+        )
+
+    def _fake_build_flux_specs(run_state, _values):
+        return [
+            SimpleNamespace(
+                name=item.name,
+                fcen=float(item.fcen or 0.0),
+                df=float(item.df or 0.0),
+                nfreq=int(item.nfreq or 1),
+            )
+            for item in run_state.flux_monitors
+        ]
+
+    def _fake_run_sim(_params, _log, **kwargs):
+        run_calls.append(kwargs)
+        if len(run_calls) == 1:
+            flux_results = [
+                SimpleNamespace(
+                    name="ref_inc",
+                    freqs=[0.1, 0.2],
+                    values=[2.0, 4.0],
+                )
+            ]
+        else:
+            flux_results = [
+                SimpleNamespace(
+                    name="dev_tx",
+                    freqs=[0.1, 0.2],
+                    values=[1.0, 2.0],
+                )
+            ]
+        return SimpleNamespace(canceled=False, flux_results=flux_results, flux_data={})
+
+    monkeypatch.setattr(transmission_module, "create_run_output_dir", lambda _prefix: str(tmp_path))
+    monkeypatch.setattr(
+        transmission_module,
+        "export_transmission_outputs",
+        _fake_export_transmission_outputs,
+    )
+    monkeypatch.setattr(transmission_module, "create_domain_preview_artifacts", lambda *_args, **_kwargs: [])
+
+    state = ProjectState(
+        analysis=AnalysisConfig(
+            kind="transmission_spectrum",
+            transmission_spectrum=TransmissionSpectrumConfig(
+                incident_monitor="ref_inc",
+                transmission_monitor="dev_tx",
+                stop_condition="field_decay",
+                field_decay_component="Hz",
+                reference_field_decay_additional_time="11",
+                reference_field_decay_point_x="1.5",
+                reference_field_decay_point_y="2.5",
+                reference_field_decay_by="1e-4",
+                scattering_field_decay_additional_time="22",
+                scattering_field_decay_point_x="3.5",
+                scattering_field_decay_point_y="4.5",
+                scattering_field_decay_by="5e-4",
+                reference_state=TransmissionDomainState(
+                    flux_monitors=[FluxMonitorConfig(name="ref_inc", fcen="0.2", df="0.1", nfreq="50")]
+                ),
+            ),
+        ),
+        flux_monitors=[FluxMonitorConfig(name="dev_tx", fcen="0.2", df="0.1", nfreq="50")],
+    )
+
+    deps = SimpleNamespace(
+        run_sim=_fake_run_sim,
+        evaluate_parameters=lambda _params: ({}, []),
+        _eval_required=lambda expr, _values, _name: float(expr),
+        _build_flux_specs=_fake_build_flux_specs,
+        _build_sim_params=lambda _state: object(),
+        _run_canceled=lambda: RunResult(status="canceled"),
+        _import_meep=lambda: _FakeMeep(),
+    )
+
+    result = transmission_module.run_transmission_spectrum_impl(
+        state,
+        lambda _msg: None,
+        _no_cancel,
+        deps=deps,
+    )
+
+    assert result.status == "completed"
+    assert len(run_calls) == 2
+    assert len(stop_calls) == 2
+    assert stop_calls[0] == (11.0, _FakeMeep.Hz, ("Vector3", 1.5, 2.5, 0), 1e-4)
+    assert stop_calls[1] == (22.0, _FakeMeep.Hz, ("Vector3", 3.5, 4.5, 0), 5e-4)
+    assert run_calls[0]["until_after_sources"] is not run_calls[1]["until_after_sources"]
+
+
 def test_frequency_domain_rejects_gaussian_sources() -> None:
     state = ProjectState(
         analysis=AnalysisConfig(kind="frequency_domain_solver"),
@@ -302,6 +424,57 @@ def test_save_image_accepts_complex_arrays(tmp_path) -> None:
 
     assert out.exists()
     assert out.stat().st_size > 0
+
+
+def test_transmission_preview_marks_active_field_decay_probe() -> None:
+    pytest.importorskip("matplotlib")
+    from matplotlib.figure import Figure
+
+    class _FakeSim:
+        def plot2D(self, ax) -> None:
+            ax.set_xlim(-5, 5)
+            ax.set_ylim(-5, 5)
+
+    state = ProjectState(
+        analysis=AnalysisConfig(
+            kind="transmission_spectrum",
+            transmission_spectrum=TransmissionSpectrumConfig(
+                stop_condition="field_decay",
+                preview_domain="reference",
+                reference_field_decay_point_x="1.25",
+                reference_field_decay_point_y="-0.5",
+                scattering_field_decay_point_x="-2.5",
+                scattering_field_decay_point_y="3.0",
+            ),
+        ),
+    )
+
+    fig = Figure()
+    ax = fig.add_subplot(111)
+
+    issues = render_domain_preview_axes(
+        ax,
+        state,
+        preview_domain="reference",
+        build_sim_impl=lambda _params, _log: _FakeSim(),
+    )
+
+    assert not issues
+    assert len(ax.lines) == 1
+    assert list(ax.lines[0].get_xdata()) == [1.25]
+    assert list(ax.lines[0].get_ydata()) == [-0.5]
+
+    issues = render_domain_preview_axes(
+        ax,
+        state,
+        preview_domain="scattering",
+        build_sim_impl=lambda _params, _log: _FakeSim(),
+    )
+
+    assert not issues
+    assert len(ax.lines) == 1
+    assert list(ax.lines[0].get_xdata()) == [-2.5]
+    assert list(ax.lines[0].get_ydata()) == [3.0]
 
 
 def test_run_field_animation_wrapper_uses_patched_run_sim(monkeypatch) -> None:

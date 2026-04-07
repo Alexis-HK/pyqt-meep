@@ -16,6 +16,17 @@ from .simulation import (
 def emit_transmission(lines: list[str], state, scattering_scene, reference_scene) -> None:
     cfg = state.analysis.transmission_spectrum
     output_prefix = cfg.output_prefix.strip() or "transmission"
+    ref_marker_expr = None
+    dev_marker_expr = None
+    if cfg.stop_condition == "field_decay":
+        ref_marker_expr = (
+            cfg.reference_field_decay_point_x,
+            cfg.reference_field_decay_point_y,
+        )
+        dev_marker_expr = (
+            cfg.scattering_field_decay_point_x,
+            cfg.scattering_field_decay_point_y,
+        )
     reuse_csv_name = os.path.basename(
         (cfg.reuse_reference_csv_name or "transmission_spectrum.csv").strip()
     ) or "transmission_spectrum.csv"
@@ -65,9 +76,35 @@ def emit_transmission(lines: list[str], state, scattering_scene, reference_scene
         "cached_ref_freqs, cached_incident_ref = _load_cached_incident(reference_incident_path)",
         "use_cached_reference = cached_ref_freqs is not None and cached_incident_ref is not None",
         "",
-        "# Reference-domain setup",
+        "def _transmission_stop_condition(domain_name):",
     ):
         line(lines, text)
+    if cfg.stop_condition == "field_decay":
+        for text in (
+            "    if domain_name == 'reference':",
+            "        return mp.stop_when_fields_decayed(",
+            f"            {cfg.reference_field_decay_additional_time},",
+            f"            mp.{cfg.field_decay_component},",
+            f"            mp.Vector3({cfg.reference_field_decay_point_x}, {cfg.reference_field_decay_point_y}, 0),",
+            f"            {cfg.reference_field_decay_by},",
+            "        )",
+            "    return mp.stop_when_fields_decayed(",
+            f"        {cfg.scattering_field_decay_additional_time},",
+            f"        mp.{cfg.field_decay_component},",
+            f"        mp.Vector3({cfg.scattering_field_decay_point_x}, {cfg.scattering_field_decay_point_y}, 0),",
+            f"        {cfg.scattering_field_decay_by},",
+            "    )",
+            "",
+            "# Reference-domain setup",
+        ):
+            line(lines, text)
+    else:
+        for text in (
+            f"    return {cfg.until_after_sources}",
+            "",
+            "# Reference-domain setup",
+        ):
+            line(lines, text)
 
     emit_geometry(lines, "ref_geometry", reference_scene.objects)
     line(lines)
@@ -112,7 +149,7 @@ def emit_transmission(lines: list[str], state, scattering_scene, reference_scene
         "    ref_step_funcs = []",
         "    if ref_anim is not None:",
         "        ref_step_funcs.append(mp.at_every(anim_interval, ref_anim))",
-        f"    sim_ref.run(*ref_step_funcs, until_after_sources={cfg.until_after_sources})",
+        "    sim_ref.run(*ref_step_funcs, until_after_sources=_transmission_stop_condition('reference'))",
         "    ref_freqs = list(mp.get_flux_freqs(ref_flux_handles[incident_monitor_name]))",
         "    incident_ref = list(mp.get_fluxes(ref_flux_handles[incident_monitor_name]))",
         "    if refl_monitor_name and ref_refl_monitor_name:",
@@ -129,6 +166,7 @@ def emit_transmission(lines: list[str], state, scattering_scene, reference_scene
         title="Domain Preview (reference)",
         domain=reference_scene.domain,
         monitors=reference_scene.monitors,
+        marker_expr=ref_marker_expr,
     )
     line(lines)
     line(lines, "# Scattering-domain setup")
@@ -166,13 +204,14 @@ def emit_transmission(lines: list[str], state, scattering_scene, reference_scene
         title="Domain Preview (scattering)",
         domain=scattering_scene.domain,
         monitors=scattering_scene.monitors,
+        marker_expr=dev_marker_expr,
     )
     for text in (
         "dev_anim = mp.Animate2D(fields=anim_component, realtime=False) if animate_dev else None",
         "dev_step_funcs = []",
         "if dev_anim is not None:",
         "    dev_step_funcs.append(mp.at_every(anim_interval, dev_anim))",
-        f"sim_dev.run(*dev_step_funcs, until_after_sources={cfg.until_after_sources})",
+        "sim_dev.run(*dev_step_funcs, until_after_sources=_transmission_stop_condition('scattering'))",
         "freqs = [float(x) for x in mp.get_flux_freqs(dev_flux_handles[trans_monitor_name])]",
         "trans_dev = [float(x) for x in mp.get_fluxes(dev_flux_handles[trans_monitor_name])]",
         "if ref_freqs is None or incident_ref is None:",
