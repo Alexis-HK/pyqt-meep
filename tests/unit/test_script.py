@@ -48,6 +48,7 @@ def test_harminv_script_writes_outputs_to_subfolder() -> None:
     assert "harminv_out = os.path.join(out_dir, \"harminv.txt\")" in code
     assert "marker_expr=('0', '0')" in code
     assert "with open(harminv_out, 'w', encoding='utf-8') as f:" in code
+    assert "k_point=" not in code
 
 
 def test_field_animation_script_uses_out_dir_and_flux_exports() -> None:
@@ -74,6 +75,18 @@ def test_field_animation_script_uses_out_dir_and_flux_exports() -> None:
     assert "fig.savefig(png_path)" in code
     assert "plt.close(fig)" in code
     assert "csv_path = os.path.join(script_dir, f'{monitor_name}_flux.csv')" not in code
+    assert "k_point=" not in code
+
+
+def test_field_animation_script_emits_k_point_when_periodic_enabled() -> None:
+    state = ProjectState(
+        domain=Domain(periodic_enabled=True, k_point_x="0.1", k_point_y="0.2", k_point_z="0.3"),
+        analysis=AnalysisConfig(kind="field_animation"),
+    )
+
+    code = generate_script(state)
+
+    assert "k_point=mp.Vector3(0.1, 0.2, 0.3)" in code
 
 
 def test_harminv_script_emits_flux_png_exports_when_monitors_exist() -> None:
@@ -233,6 +246,43 @@ def test_transmission_script_uses_split_reference_and_scattering_state() -> None
     assert "dev_anim.to_mp4(anim_fps, os.path.join(out_dir, f\"{safe_prefix}_scattering.mp4\"))" in code
     assert "if len(freqs) != len(ref_freqs):" in code
     assert "if abs(float(f_dev) - float(f_ref)) > 1e-12:" in code
+    assert "k_point=" not in code
+
+
+def test_transmission_script_emits_k_point_for_reference_and_scattering_domains() -> None:
+    state = ProjectState(
+        domain=Domain(periodic_enabled=True, k_point_x="0.1", k_point_y="0.2", k_point_z="0.3"),
+        sources=[
+            SourceItem(
+                name="dev_src",
+                kind="gaussian",
+                component="Ez",
+                props={"fcen": "0.2", "df": "0.1"},
+            )
+        ],
+        flux_monitors=[FluxMonitorConfig(name="dev_tx")],
+        analysis=AnalysisConfig(
+            kind="transmission_spectrum",
+            transmission_spectrum=TransmissionSpectrumConfig(
+                incident_monitor="ref_inc",
+                transmission_monitor="dev_tx",
+                reference_state=TransmissionDomainState(
+                    domain=Domain(
+                        periodic_enabled=True,
+                        k_point_x="0.4",
+                        k_point_y="0.5",
+                        k_point_z="0.6",
+                    ),
+                    flux_monitors=[FluxMonitorConfig(name="ref_inc")],
+                ),
+            ),
+        ),
+    )
+
+    code = generate_script(state)
+
+    assert "k_point=mp.Vector3(0.4, 0.5, 0.6)," in code
+    assert "k_point=mp.Vector3(0.1, 0.2, 0.3)," in code
 
 
 def test_transmission_script_emits_per_domain_field_decay_stop_conditions() -> None:
@@ -315,6 +365,7 @@ def test_frequency_domain_script_uses_solve_cw_and_omits_flux_exports() -> None:
     assert "run_domain_preview_out = os.path.join(out_dir, 'domain_preview.png')" in code
     assert "sim.add_flux" not in code
     assert "for monitor_name, monitor_obj in flux_monitors:" not in code
+    assert "k_point=" not in code
 
 
 def test_frequency_domain_script_warns_when_no_sources_are_configured() -> None:
@@ -377,6 +428,33 @@ def test_meep_k_points_script_emits_run_k_points_plot_and_csv() -> None:
     assert "sim.add_flux" not in code
     assert "for monitor_name, monitor_obj in flux_monitors:" not in code
     assert "plt.xticks(" not in code
+    assert "k_point=" not in code
+
+
+def test_meep_k_points_script_ignores_periodic_domain_k_point() -> None:
+    state = ProjectState(
+        domain=Domain(periodic_enabled=True, k_point_x="0.1", k_point_y="0.2", k_point_z="0.3"),
+        sources=[
+            SourceItem(
+                name="pulse",
+                kind="gaussian",
+                component="Ez",
+                props={"fcen": "0.2", "df": "0.1"},
+            )
+        ],
+        analysis=AnalysisConfig(
+            kind="meep_k_points",
+            meep_k_points=MeepKPointsConfig(
+                kpoint_interp="19",
+                run_time="300",
+                kpoints=[KPoint(kx="0", ky="0"), KPoint(kx="0.5", ky="0")],
+            ),
+        ),
+    )
+
+    code = generate_script(state)
+
+    assert "k_point=" not in code
 
 
 def test_meep_k_points_script_emits_imaginary_frequency_colormap_when_enabled() -> None:

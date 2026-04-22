@@ -121,6 +121,7 @@ def run_meep_k_points_impl(
         raise ValueError("Meep k points requires at least two input k-points.")
 
     params = deps._build_sim_params(state)
+    params.k_point = None
     sim = deps.build_sim(params, log)
     mp = deps._import_meep()
 

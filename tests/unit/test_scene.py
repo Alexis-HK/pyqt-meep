@@ -54,6 +54,10 @@ def test_project_state_compiles_to_typed_scene_ir() -> None:
             resolution="20",
             pml_width="1",
             pml_mode="both",
+            periodic_enabled=True,
+            k_point_x="0.1",
+            k_point_y="w / 4",
+            k_point_z="0",
             symmetry_enabled=True,
             symmetries=[SymmetryItem(name="mx", kind="mirror", direction="x", phase="-1")],
         ),
@@ -85,11 +89,24 @@ def test_project_state_compiles_to_typed_scene_ir() -> None:
     assert scene.sources[0].frequency_expr == "0.2"
     assert scene.monitors[0].nfreq_expr == "40"
     assert scene.symmetries[0].phase_expr == "-1"
+    assert scene.domain.periodic_enabled is True
+    assert scene.domain.k_point_x_expr == "0.1"
     assert compiled.context.parameter_values == {"w": 2.0, "h": 3.0}
     assert params.cell_x == 4.0
+    assert params.k_point == (0.1, 0.5, 0.0)
     assert params.shapes[0].size_x == 2.0
     assert params.shapes[0].size_y == 3.0
     assert params.symmetries[0].phase == complex(-1, 0)
+
+
+def test_scene_to_sim_params_leaves_k_point_unset_when_periodic_disabled() -> None:
+    state = ProjectState(domain=Domain(periodic_enabled=False, k_point_x="0.4", k_point_y="0.5"))
+
+    compiled = compile_project_scene(state)
+    params = scene_to_sim_params(compiled.scene, compiled.context)
+
+    assert compiled.scene.domain.periodic_enabled is False
+    assert params.k_point is None
 
 
 def test_transmission_scene_bundle_keeps_scattering_and_reference_separate() -> None:

@@ -528,6 +528,44 @@ def test_domain_tab_routes_updates_to_reference_domain(qtbot) -> None:
     assert store.state.domain.cell_x == "10"
 
 
+def test_domain_tab_periodic_toggle_updates_visibility_and_scope(qtbot) -> None:
+    store = ProjectStore()
+    tab = DomainTab(store)
+    qtbot.addWidget(tab)
+
+    assert tab.k_point_widget.isHidden()
+    tab.periodic_enabled.setChecked(True)
+    assert not tab.k_point_widget.isHidden()
+
+    tab.k_point_x.setText("0.1")
+    tab.k_point_y.setText("0.2")
+    tab.k_point_z.setText("0.3")
+    tab._on_apply()
+
+    assert store.state.domain.periodic_enabled is True
+    assert store.state.domain.k_point_x == "0.1"
+    assert store.state.domain.k_point_y == "0.2"
+    assert store.state.domain.k_point_z == "0.3"
+
+
+def test_domain_tab_routes_periodic_updates_to_reference_domain(qtbot) -> None:
+    store = ProjectStore()
+    tx_cfg = TransmissionSpectrumConfig(preview_domain="reference")
+    store.state.analysis = AnalysisConfig(kind="transmission_spectrum", transmission_spectrum=tx_cfg)
+
+    tab = DomainTab(store)
+    qtbot.addWidget(tab)
+    tab.periodic_enabled.setChecked(True)
+    tab.k_point_x.setText("0.4")
+    tab.k_point_y.setText("0.5")
+    tab.k_point_z.setText("0.6")
+    tab._on_apply()
+
+    assert store.state.analysis.transmission_spectrum.reference_state.domain.periodic_enabled is True
+    assert store.state.analysis.transmission_spectrum.reference_state.domain.k_point_x == "0.4"
+    assert store.state.domain.periodic_enabled is False
+
+
 def test_symmetry_dialog_accepts_complex_literal_and_rejects_non_literal(qtbot, monkeypatch) -> None:
     store = ProjectStore()
     dialog = SymmetryEditDialog(

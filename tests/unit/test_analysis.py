@@ -765,9 +765,14 @@ def test_meep_k_points_emits_plot_and_csv(monkeypatch) -> None:
 
     sim = _FakeSim()
     norm_calls: list[list[float]] = []
+    sim_k_points: list[object] = []
 
     monkeypatch.setattr(analysis, "_import_meep", lambda: _FakeMP())
-    monkeypatch.setattr(analysis, "build_sim", lambda params, log: sim)
+    monkeypatch.setattr(
+        analysis,
+        "build_sim",
+        lambda params, log: sim_k_points.append(params.k_point) or sim,
+    )
     monkeypatch.setattr(
         meep_k_points_module,
         "_build_freq_imag_norm",
@@ -783,6 +788,7 @@ def test_meep_k_points_emits_plot_and_csv(monkeypatch) -> None:
                 kpoints=[KPoint(kx="0", ky="0"), KPoint(kx="0.5", ky="0")],
             ),
         ),
+        domain=Domain(periodic_enabled=True, k_point_x="0.1", k_point_y="0.2", k_point_z="0.3"),
         sources=[
             SourceItem(
                 name="src",
@@ -803,6 +809,8 @@ def test_meep_k_points_emits_plot_and_csv(monkeypatch) -> None:
     assert result.plots[0].png_path
     assert result.plots[0].csv_path
     assert result.meta["primary_frequency"] == "0.2"
+    assert sim_k_points[0] is None
+    assert sim_k_points[1:] == [(0.1, 0.2, 0.3)]
     assert norm_calls == []
     csv_text = open(result.plots[0].csv_path, "r", encoding="utf-8").read()
     assert "k_index,kx,ky,mode,freq_real,freq_imag" in csv_text

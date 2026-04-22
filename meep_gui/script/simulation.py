@@ -50,6 +50,14 @@ def emit_boundary_layers(lines: list[str], var_name: str, domain) -> None:
         line(lines, f"{var_name}.append(mp.PML(thickness={domain.pml_width_expr}, direction=mp.Y))")
 
 
+def simulation_k_point_expr(domain) -> str | None:
+    if not getattr(domain, "periodic_enabled", False):
+        return None
+    return (
+        f"mp.Vector3({domain.k_point_x_expr}, {domain.k_point_y_expr}, {domain.k_point_z_expr})"
+    )
+
+
 def emit_symmetries(lines: list[str], var_name: str, symmetries) -> None:
     line(lines, f"{var_name} = []")
     for symmetry in symmetries:

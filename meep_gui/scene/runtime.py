@@ -51,6 +51,14 @@ def scene_to_sim_params(scene: SceneSpec, context: CompilationContext) -> SimPar
             )
         )
 
+    k_point = None
+    if scene.domain.periodic_enabled:
+        k_point = (
+            eval_required(scene.domain.k_point_x_expr, context, "k_point_x"),
+            eval_required(scene.domain.k_point_y_expr, context, "k_point_y"),
+            eval_required(scene.domain.k_point_z_expr, context, "k_point_z"),
+        )
+
     return SimParams(
         cell_x=eval_required(scene.domain.cell_x_expr, context, "cell_x"),
         cell_y=eval_required(scene.domain.cell_y_expr, context, "cell_y"),
@@ -58,6 +66,7 @@ def scene_to_sim_params(scene: SceneSpec, context: CompilationContext) -> SimPar
         pml=eval_required(scene.domain.pml_width_expr, context, "pml_width"),
         pml_x=scene.domain.pml_mode in {"x", "both"},
         pml_y=scene.domain.pml_mode in {"y", "both"},
+        k_point=k_point,
         symmetries=symmetries,
         shapes=shapes,
         sources=sources,

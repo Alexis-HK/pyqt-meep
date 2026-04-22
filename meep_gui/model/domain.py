@@ -13,6 +13,10 @@ class Domain:
     resolution: str = "20"
     pml_width: str = "1"
     pml_mode: str = "both"
+    periodic_enabled: bool = False
+    k_point_x: str = "0"
+    k_point_y: str = "0"
+    k_point_z: str = "0"
     symmetry_enabled: bool = False
     symmetries: list[SymmetryItem] = field(default_factory=list)
 
@@ -56,6 +60,10 @@ def normalize_domain(domain: Domain) -> Domain:
         resolution=domain.resolution,
         pml_width=domain.pml_width,
         pml_mode=pml_mode,
+        periodic_enabled=normalize_bool(domain.periodic_enabled, False),
+        k_point_x=domain.k_point_x,
+        k_point_y=domain.k_point_y,
+        k_point_z=domain.k_point_z,
         symmetry_enabled=normalize_bool(domain.symmetry_enabled, False),
         symmetries=normalized_symmetries,
     )

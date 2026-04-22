@@ -10,6 +10,7 @@ from .simulation import (
     emit_geometry,
     emit_sources,
     emit_symmetries,
+    simulation_k_point_expr,
 )
 
 
@@ -114,6 +115,7 @@ def emit_transmission(lines: list[str], state, scattering_scene, reference_scene
     line(lines)
     emit_symmetries(lines, "ref_symmetries", reference_scene.symmetries)
     line(lines)
+    ref_k_point_expr = simulation_k_point_expr(reference_scene.domain)
     for text in (
         "sim_ref = mp.Simulation(",
         f"    cell_size=mp.Vector3({reference_scene.domain.cell_x_expr}, {reference_scene.domain.cell_y_expr}, 0),",
@@ -122,9 +124,11 @@ def emit_transmission(lines: list[str], state, scattering_scene, reference_scene
         "    sources=ref_sources,",
         "    symmetries=ref_symmetries,",
         f"    resolution={reference_scene.domain.resolution_expr},",
-        ")",
     ):
         line(lines, text)
+    if ref_k_point_expr is not None:
+        line(lines, f"    k_point={ref_k_point_expr},")
+    line(lines, ")")
     emit_flux_handles(lines, "ref_flux_handles", "sim_ref", reference_scene.monitors)
     for text in (
         "if incident_monitor_name not in ref_flux_handles:",
@@ -175,6 +179,7 @@ def emit_transmission(lines: list[str], state, scattering_scene, reference_scene
     line(lines)
     emit_symmetries(lines, "dev_symmetries", scattering_scene.symmetries)
     line(lines)
+    dev_k_point_expr = simulation_k_point_expr(scattering_scene.domain)
     for text in (
         "sim_dev = mp.Simulation(",
         f"    cell_size=mp.Vector3({scattering_scene.domain.cell_x_expr}, {scattering_scene.domain.cell_y_expr}, 0),",
@@ -183,9 +188,11 @@ def emit_transmission(lines: list[str], state, scattering_scene, reference_scene
         "    sources=sources,",
         "    symmetries=dev_symmetries,",
         f"    resolution={scattering_scene.domain.resolution_expr},",
-        ")",
     ):
         line(lines, text)
+    if dev_k_point_expr is not None:
+        line(lines, f"    k_point={dev_k_point_expr},")
+    line(lines, ")")
     emit_flux_handles(lines, "dev_flux_handles", "sim_dev", scattering_scene.monitors)
     for text in (
         "if trans_monitor_name not in dev_flux_handles:",

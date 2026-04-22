@@ -24,6 +24,10 @@ class DomainSpec:
     resolution_expr: str
     pml_width_expr: str
     pml_mode: str
+    periodic_enabled: bool = False
+    k_point_x_expr: str = "0"
+    k_point_y_expr: str = "0"
+    k_point_z_expr: str = "0"
 
 
 @dataclass(frozen=True)
@@ -123,6 +127,10 @@ class SceneSpec:
             resolution_expr="20",
             pml_width_expr="1",
             pml_mode="both",
+            periodic_enabled=False,
+            k_point_x_expr="0",
+            k_point_y_expr="0",
+            k_point_z_expr="0",
         )
     )
     symmetries: tuple[SymmetrySpec, ...] = ()

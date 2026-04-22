@@ -63,6 +63,8 @@ class AnalysisRecipe(Protocol):
 
     def script_include_flux_exports(self, plan: ScriptPlan) -> bool: ...
 
+    def script_include_k_point(self, plan: ScriptPlan) -> bool: ...
+
 
 @dataclass(frozen=True)
 class BaseRecipe:
@@ -98,3 +100,6 @@ class BaseRecipe:
 
     def script_include_flux_exports(self, plan: ScriptPlan) -> bool:
         return self.script_include_flux_monitors(plan)
+
+    def script_include_k_point(self, plan: ScriptPlan) -> bool:
+        return self.uses_fdtd_script_setup(plan)

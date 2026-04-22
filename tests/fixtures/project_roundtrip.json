@@ -14,6 +14,10 @@
     "resolution": "20",
     "pml_width": "1",
     "pml_mode": "both",
+    "periodic_enabled": true,
+    "k_point_x": "0.1",
+    "k_point_y": "0.2",
+    "k_point_z": "0.3",
     "symmetry_enabled": false,
     "symmetries": []
   },
@@ -83,6 +87,10 @@
           "resolution": "25",
           "pml_width": "1.5",
           "pml_mode": "x",
+          "periodic_enabled": false,
+          "k_point_x": "0",
+          "k_point_y": "0",
+          "k_point_z": "0",
           "symmetry_enabled": true,
           "symmetries": [
             {

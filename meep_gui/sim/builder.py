@@ -78,7 +78,7 @@ def build_sim(params: SimParams, log: LogFn, *, force_complex_fields: bool = Fal
             raise ValueError(f"Unsupported symmetry kind: {spec.kind}")
 
     log("Building simulation...")
-    return mp.Simulation(
+    sim_kwargs = dict(
         cell_size=cell,
         boundary_layers=pml_layers,
         geometry=geometry,
@@ -86,4 +86,9 @@ def build_sim(params: SimParams, log: LogFn, *, force_complex_fields: bool = Fal
         symmetries=symmetries,
         resolution=params.resolution,
         force_complex_fields=force_complex_fields,
+    )
+    if params.k_point is not None:
+        sim_kwargs["k_point"] = mp.Vector3(*params.k_point)
+    return mp.Simulation(
+        **sim_kwargs,
     )

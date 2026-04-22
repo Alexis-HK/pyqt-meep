@@ -16,6 +16,7 @@ from .simulation import (
     emit_materials,
     emit_sources,
     emit_symmetries,
+    simulation_k_point_expr,
 )
 
 
@@ -88,6 +89,7 @@ def _emit_fdtd_setup(
     enabled: bool,
     force_complex_fields: bool = False,
     include_flux_monitors: bool = True,
+    include_k_point: bool = True,
 ) -> None:
     if not enabled:
         return
@@ -101,13 +103,18 @@ def _emit_fdtd_setup(
         line(lines, f"boundary_layers.append(mp.PML(thickness={pml}, direction=mp.Y))")
     emit_symmetries(lines, "symmetries", scene.symmetries)
     force_complex_arg = ", force_complex_fields=True" if force_complex_fields else ""
+    k_point_arg = ""
+    if include_k_point:
+        k_point_expr = simulation_k_point_expr(scene.domain)
+        if k_point_expr is not None:
+            k_point_arg = f", k_point={k_point_expr}"
     line(
         lines,
         "sim = mp.Simulation("
         f"cell_size=mp.Vector3({scene.domain.cell_x_expr}, {scene.domain.cell_y_expr}, 0), "
         "boundary_layers=boundary_layers, geometry=geometry, sources=sources, "
         "symmetries=symmetries, "
-        f"resolution={scene.domain.resolution_expr}{force_complex_arg})",
+        f"resolution={scene.domain.resolution_expr}{force_complex_arg}{k_point_arg})",
     )
     line(lines)
 
@@ -255,6 +262,7 @@ def _build_analysis_body(
         enabled=prepared.recipe.uses_fdtd_script_setup(prepared.plan),
         force_complex_fields=prepared.recipe.script_force_complex_fields(prepared.plan),
         include_flux_monitors=prepared.recipe.script_include_flux_monitors(prepared.plan),
+        include_k_point=prepared.recipe.script_include_k_point(prepared.plan),
     )
     if prepared.plan.backend == "meep_fdtd" and prepared.recipe.uses_fdtd_script_setup(prepared.plan):
         marker_expr = None

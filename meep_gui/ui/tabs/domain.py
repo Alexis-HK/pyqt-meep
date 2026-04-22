@@ -23,6 +23,20 @@ class DomainTab(QtWidgets.QWidget):
         self.pml_width = QtWidgets.QLineEdit()
         self.pml_mode = QtWidgets.QComboBox()
         self.pml_mode.addItems(list(PML_MODES))
+        self.periodic_enabled = QtWidgets.QCheckBox("Periodic Boundary (use k_point)")
+        self.k_point_x = QtWidgets.QLineEdit()
+        self.k_point_y = QtWidgets.QLineEdit()
+        self.k_point_z = QtWidgets.QLineEdit()
+        self.k_point_widget = QtWidgets.QWidget()
+        k_point_layout = QtWidgets.QHBoxLayout(self.k_point_widget)
+        k_point_layout.setContentsMargins(0, 0, 0, 0)
+        for label, widget in (
+            ("Kx", self.k_point_x),
+            ("Ky", self.k_point_y),
+            ("Kz", self.k_point_z),
+        ):
+            k_point_layout.addWidget(QtWidgets.QLabel(label))
+            k_point_layout.addWidget(widget)
         self.symmetry_enabled = QtWidgets.QCheckBox("Enable Symmetries")
         self.add_symmetry = QtWidgets.QPushButton("Add")
         self.update_symmetry = QtWidgets.QPushButton("Update")
@@ -39,6 +53,8 @@ class DomainTab(QtWidgets.QWidget):
         form.addRow("Resolution", self.resolution)
         form.addRow("PML Width", self.pml_width)
         form.addRow("PML Mode", self.pml_mode)
+        form.addRow(self.periodic_enabled)
+        form.addRow("k_point", self.k_point_widget)
 
         symmetry_buttons = QtWidgets.QHBoxLayout()
         symmetry_buttons.addWidget(self.add_symmetry)
@@ -52,9 +68,18 @@ class DomainTab(QtWidgets.QWidget):
         layout.addWidget(self.symmetry_table)
         layout.addStretch(1)
 
-        for widget in (self.cell_x, self.cell_y, self.resolution, self.pml_width):
+        for widget in (
+            self.cell_x,
+            self.cell_y,
+            self.resolution,
+            self.pml_width,
+            self.k_point_x,
+            self.k_point_y,
+            self.k_point_z,
+        ):
             widget.editingFinished.connect(self._on_apply)
         self.pml_mode.currentTextChanged.connect(lambda _: self._on_apply())
+        self.periodic_enabled.toggled.connect(self._on_periodic_toggle)
         self.symmetry_enabled.toggled.connect(self._on_symmetry_toggle)
         self.add_symmetry.clicked.connect(self._on_add_symmetry)
         self.update_symmetry.clicked.connect(self._on_update_symmetry)
@@ -80,6 +105,14 @@ class DomainTab(QtWidgets.QWidget):
             (self.resolution, "Resolution"),
             (self.pml_width, "PML Width"),
         ]
+        if self.periodic_enabled.isChecked():
+            fields.extend(
+                [
+                    (self.k_point_x, "Kx"),
+                    (self.k_point_y, "Ky"),
+                    (self.k_point_z, "Kz"),
+                ]
+            )
         ok = True
         for widget, label in fields:
             result = validate_numeric_expression(widget.text().strip(), allowed)
@@ -98,8 +131,19 @@ class DomainTab(QtWidgets.QWidget):
             resolution=self.resolution.text().strip(),
             pml_width=self.pml_width.text().strip(),
             pml_mode=self.pml_mode.currentText(),
+            periodic_enabled=self.periodic_enabled.isChecked(),
+            k_point_x=self.k_point_x.text().strip(),
+            k_point_y=self.k_point_y.text().strip(),
+            k_point_z=self.k_point_z.text().strip(),
         )
         self.store.notify()
+
+    def _sync_periodic_controls(self) -> None:
+        self.k_point_widget.setVisible(self.periodic_enabled.isChecked())
+
+    def _on_periodic_toggle(self, _checked: bool) -> None:
+        self._sync_periodic_controls()
+        self._on_apply()
 
     def _sync_symmetry_controls(self) -> None:
         enabled = self.symmetry_enabled.isChecked()
@@ -167,9 +211,16 @@ class DomainTab(QtWidgets.QWidget):
         self.cell_y.setText(domain.cell_y)
         self.resolution.setText(domain.resolution)
         self.pml_width.setText(domain.pml_width)
+        self.k_point_x.setText(domain.k_point_x)
+        self.k_point_y.setText(domain.k_point_y)
+        self.k_point_z.setText(domain.k_point_z)
         idx = self.pml_mode.findText(domain.pml_mode)
         if idx >= 0:
             self.pml_mode.setCurrentIndex(idx)
+        self.periodic_enabled.blockSignals(True)
+        self.periodic_enabled.setChecked(domain.periodic_enabled)
+        self.periodic_enabled.blockSignals(False)
+        self._sync_periodic_controls()
         self.symmetry_enabled.blockSignals(True)
         self.symmetry_enabled.setChecked(domain.symmetry_enabled)
         self.symmetry_enabled.blockSignals(False)

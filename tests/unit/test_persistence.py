@@ -22,6 +22,10 @@ def test_project_dict_roundtrip_fixture() -> None:
     assert state.analysis.transmission_spectrum.reuse_reference_run_id == ""
     assert state.analysis.transmission_spectrum.reuse_reference_csv_name == "transmission_spectrum.csv"
     assert state.analysis.meep_k_points.color_by_freq_imag is True
+    assert state.domain.periodic_enabled is True
+    assert state.domain.k_point_x == "0.1"
+    assert state.domain.k_point_y == "0.2"
+    assert state.domain.k_point_z == "0.3"
     assert state.results == []
 
 
@@ -59,6 +63,10 @@ def test_absent_new_sections_fixture_keeps_defaults() -> None:
     assert state.analysis.transmission_spectrum.reference_state.flux_monitors == []
     assert state.domain.symmetry_enabled is False
     assert state.domain.symmetries == []
+    assert state.domain.periodic_enabled is False
+    assert state.domain.k_point_x == "0"
+    assert state.domain.k_point_y == "0"
+    assert state.domain.k_point_z == "0"
     assert state.analysis.frequency_domain_solver.component == "Ez"
     assert state.analysis.frequency_domain_solver.tolerance == "1e-8"
     assert state.analysis.frequency_domain_solver.max_iters == "10000"

@@ -78,6 +78,10 @@ def load_domain(raw: dict | None) -> Domain:
         resolution=as_str(raw.get("resolution", "20"), "20"),
         pml_width=as_str(raw.get("pml_width", "1"), "1"),
         pml_mode=as_str(raw.get("pml_mode", "both"), "both"),
+        periodic_enabled=normalize_bool(raw.get("periodic_enabled", False), False),
+        k_point_x=as_str(raw.get("k_point_x", "0"), "0"),
+        k_point_y=as_str(raw.get("k_point_y", "0"), "0"),
+        k_point_z=as_str(raw.get("k_point_z", "0"), "0"),
         symmetry_enabled=normalize_bool(raw.get("symmetry_enabled", False), False),
         symmetries=load_symmetries(raw.get("symmetries", [])),
     )

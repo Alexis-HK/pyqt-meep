@@ -101,3 +101,6 @@ class MeepKPointsRecipe(BaseRecipe):
 
     def script_include_flux_exports(self, plan: ScriptPlan) -> bool:
         return False
+
+    def script_include_k_point(self, plan: ScriptPlan) -> bool:
+        return False
