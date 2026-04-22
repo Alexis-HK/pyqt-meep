@@ -19,6 +19,7 @@ from meep_gui.model import (
     TransmissionDomainState,
     TransmissionSpectrumConfig,
 )
+from meep_gui.script.analyses import emit_flux_exports
 from meep_gui.script import generate_script
 
 
@@ -60,8 +61,50 @@ def test_field_animation_script_uses_out_dir_and_flux_exports() -> None:
     assert "run_domain_preview_out = os.path.join(out_dir, 'domain_preview.png')" in code
     assert "anim_out = os.path.join(out_dir, \"animation.mp4\")" in code
     assert "anim_out = os.path.join(script_dir, \"animation.mp4\")" not in code
+    assert "import matplotlib.pyplot as plt" in code
     assert "csv_path = os.path.join(out_dir, f'{monitor_name}_flux.csv')" in code
+    assert "png_path = os.path.join(out_dir, f'{monitor_name}_flux.png')" in code
+    assert "fig = plt.figure(figsize=(6, 4), dpi=120)" in code
+    assert "ax.plot(freqs, vals, linewidth=1.5)" in code
+    assert "ax.set_title(f'Flux Monitor: {monitor_name}')" in code
+    assert "ax.set_xlabel('Frequency')" in code
+    assert "ax.set_ylabel('Flux')" in code
+    assert "ax.grid(True, linestyle=':', linewidth=0.5)" in code
+    assert "fig.tight_layout()" in code
+    assert "fig.savefig(png_path)" in code
+    assert "plt.close(fig)" in code
     assert "csv_path = os.path.join(script_dir, f'{monitor_name}_flux.csv')" not in code
+
+
+def test_harminv_script_emits_flux_png_exports_when_monitors_exist() -> None:
+    state = ProjectState(
+        flux_monitors=[FluxMonitorConfig(name="tx")],
+        analysis=AnalysisConfig(kind="harminv"),
+    )
+
+    code = generate_script(state)
+
+    assert "import matplotlib.pyplot as plt" in code
+    assert "csv_path = os.path.join(out_dir, f'{monitor_name}_flux.csv')" in code
+    assert "png_path = os.path.join(out_dir, f'{monitor_name}_flux.png')" in code
+    assert "ax.plot(freqs, vals, linewidth=1.5)" in code
+    assert "fig.savefig(png_path)" in code
+    assert "plt.close(fig)" in code
+
+
+def test_emit_flux_exports_emits_csv_then_png_plot_code() -> None:
+    lines: list[str] = []
+
+    emit_flux_exports(lines)
+
+    code = "\n".join(lines)
+    csv_index = code.index("csv_path = os.path.join(out_dir, f'{monitor_name}_flux.csv')")
+    png_index = code.index("png_path = os.path.join(out_dir, f'{monitor_name}_flux.png')")
+    figure_index = code.index("fig = plt.figure(figsize=(6, 4), dpi=120)")
+    save_index = code.index("fig.savefig(png_path)")
+
+    assert "import matplotlib.pyplot as plt" in code
+    assert csv_index < png_index < figure_index < save_index
 
 
 def test_mpb_script_includes_te_tm_field_and_tutorial_epsilon_plot() -> None:
