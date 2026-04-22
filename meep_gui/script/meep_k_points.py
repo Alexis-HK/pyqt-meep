@@ -29,6 +29,7 @@ def emit_meep_k_points(lines: list[str], state) -> None:
         "    writer.writerow(['k_index', 'kx', 'ky', 'mode', 'freq_real', 'freq_imag'])",
         "    scatter_x = []",
         "    scatter_y = []",
+        "    scatter_imag = []",
         "    for k_index, kp in enumerate(k_points):",
         "        point_freqs = []",
         "        if all_freqs is not None and k_index < len(all_freqs):",
@@ -44,10 +45,40 @@ def emit_meep_k_points(lines: list[str], state) -> None:
         "            writer.writerow([k_index, float(kp.x), float(kp.y), mode, float(cval.real), float(cval.imag)])",
         "            scatter_x.append(k_index)",
         "            scatter_y.append(float(cval.real))",
+        "            scatter_imag.append(float(cval.imag))",
         f"band_png = os.path.join(out_dir, '{prefix}_bands.png')",
         "plt.figure(figsize=(6, 4), dpi=120)",
-        "if scatter_x:",
-        "    plt.scatter(scatter_x, scatter_y, s=18, color='#1f77b4')",
+    ):
+        line(lines, text)
+    if cfg.color_by_freq_imag:
+        for text in (
+            "from matplotlib import colors as mcolors",
+            "if scatter_x:",
+            "    imag_min = min(scatter_imag)",
+            "    imag_max = max(scatter_imag)",
+            "    if abs(imag_max - imag_min) <= 1e-12:",
+            "        imag_delta = max(abs(imag_min) * 1e-9, 1e-12)",
+            "        imag_min -= imag_delta",
+            "        imag_max += imag_delta",
+            "    scatter = plt.scatter(",
+            "        scatter_x,",
+            "        scatter_y,",
+            "        s=18,",
+            "        c=scatter_imag,",
+            "        cmap='coolwarm',",
+            "        norm=mcolors.Normalize(vmin=imag_min, vmax=imag_max),",
+            "    )",
+            "    colorbar = plt.colorbar(scatter)",
+            "    colorbar.set_label('Imaginary Frequency')",
+        ):
+            line(lines, text)
+    else:
+        for text in (
+            "if scatter_x:",
+            "    plt.scatter(scatter_x, scatter_y, s=18, color='#1f77b4')",
+        ):
+            line(lines, text)
+    for text in (
         "plt.title('Meep K-Points Band Diagram')",
         "plt.xlabel('k-index')",
         "plt.ylabel('Frequency')",

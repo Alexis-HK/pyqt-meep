@@ -46,6 +46,51 @@ def _row_freqs(values) -> list[complex]:
     return freqs
 
 
+def _build_freq_imag_norm(freq_imag_values, colors_module):
+    imag_min = min(freq_imag_values)
+    imag_max = max(freq_imag_values)
+    if abs(imag_max - imag_min) <= 1e-12:
+        imag_delta = max(abs(imag_min) * 1e-9, 1e-12)
+        imag_min -= imag_delta
+        imag_max += imag_delta
+    return colors_module.Normalize(vmin=imag_min, vmax=imag_max)
+
+
+def _save_meep_k_points_plot(rows, png_path: str, *, color_by_freq_imag: bool) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib import colors as mcolors
+
+    fig = plt.figure(figsize=(6, 4), dpi=120)
+    ax = fig.add_subplot(111)
+    if rows:
+        scatter_x = [row[0] for row in rows]
+        scatter_y = [row[4] for row in rows]
+        if color_by_freq_imag:
+            freq_imag_values = [row[5] for row in rows]
+            scatter = ax.scatter(
+                scatter_x,
+                scatter_y,
+                s=18,
+                c=freq_imag_values,
+                cmap="coolwarm",
+                norm=_build_freq_imag_norm(freq_imag_values, mcolors),
+            )
+            colorbar = fig.colorbar(scatter, ax=ax)
+            colorbar.set_label("Imaginary Frequency")
+        else:
+            ax.scatter(scatter_x, scatter_y, s=18, color="#1f77b4")
+    ax.set_title("Meep K-Points Band Diagram")
+    ax.set_xlabel("k-index")
+    ax.set_ylabel("Frequency")
+    ax.grid(True, linestyle=":", linewidth=0.5)
+    fig.tight_layout()
+    fig.savefig(png_path)
+    plt.close(fig)
+
+
 def run_meep_k_points_impl(
     state: ProjectState,
     log: LogFn,
@@ -99,11 +144,6 @@ def run_meep_k_points_impl(
     if cancel_requested():
         return deps._run_canceled()
 
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
     out_dir = create_run_output_dir("meep_gui_meep_k_points_")
     prefix = cfg.output_prefix.strip() or "meep_k_points"
     csv_path = os.path.join(out_dir, f"{prefix}_bands.csv")
@@ -127,17 +167,11 @@ def run_meep_k_points_impl(
         writer.writerow(["k_index", "kx", "ky", "mode", "freq_real", "freq_imag"])
         writer.writerows(rows)
 
-    fig = plt.figure(figsize=(6, 4), dpi=120)
-    ax = fig.add_subplot(111)
-    if rows:
-        ax.scatter([row[0] for row in rows], [row[4] for row in rows], s=18, color="#1f77b4")
-    ax.set_title("Meep K-Points Band Diagram")
-    ax.set_xlabel("k-index")
-    ax.set_ylabel("Frequency")
-    ax.grid(True, linestyle=":", linewidth=0.5)
-    fig.tight_layout()
-    fig.savefig(png_path)
-    plt.close(fig)
+    _save_meep_k_points_plot(
+        rows,
+        png_path,
+        color_by_freq_imag=cfg.color_by_freq_imag,
+    )
 
     message = "Meep k points completed."
     if not rows:

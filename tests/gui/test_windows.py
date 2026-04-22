@@ -679,12 +679,16 @@ def test_meep_k_points_panel_updates_config_and_points(qtbot) -> None:
     panel.kx.setText("0.5")
     panel.ky.setText("0")
     qtbot.mouseClick(panel.add_k, QtCore.Qt.LeftButton)
+    assert panel.color_by_freq_imag.text() == "Color Modes by Imaginary Part"
+    panel.color_by_freq_imag.setChecked(True)
+    assert store.state.analysis.meep_k_points.color_by_freq_imag is True
 
     assert panel.apply() is True
     cfg = store.state.analysis.meep_k_points
     assert cfg.kpoint_interp == "7"
     assert cfg.run_time == "450"
     assert cfg.kpoints == [KPoint(kx="0", ky="0"), KPoint(kx="0.5", ky="0")]
+    assert cfg.color_by_freq_imag is True
 
 
 def test_output_window_lists_only_non_field_mpb_artifacts_when_no_field_kpoints(qtbot, tmp_path) -> None:

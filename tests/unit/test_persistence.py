@@ -21,6 +21,7 @@ def test_project_dict_roundtrip_fixture() -> None:
     assert dumped == raw
     assert state.analysis.transmission_spectrum.reuse_reference_run_id == ""
     assert state.analysis.transmission_spectrum.reuse_reference_csv_name == "transmission_spectrum.csv"
+    assert state.analysis.meep_k_points.color_by_freq_imag is True
     assert state.results == []
 
 
@@ -66,6 +67,7 @@ def test_absent_new_sections_fixture_keeps_defaults() -> None:
     assert state.analysis.meep_k_points.run_time == "300"
     assert state.analysis.meep_k_points.kpoints == []
     assert state.analysis.meep_k_points.output_prefix == "meep_k_points"
+    assert state.analysis.meep_k_points.color_by_freq_imag is False
     assert state.analysis.mpb_modesolver.run_tm is True
     assert state.analysis.mpb_modesolver.run_te is False
     assert state.analysis.mpb_modesolver.field_kpoints == []

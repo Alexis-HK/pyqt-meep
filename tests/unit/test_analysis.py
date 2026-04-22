@@ -7,6 +7,7 @@ import pytest
 
 import meep_gui.analysis as analysis
 import meep_gui.analysis.domain_artifacts as domain_artifacts_module
+import meep_gui.analysis.meep_k_points as meep_k_points_module
 import meep_gui.analysis.transmission as transmission_module
 from meep_gui.analysis import (
     ArtifactResult,
@@ -763,9 +764,15 @@ def test_meep_k_points_emits_plot_and_csv(monkeypatch) -> None:
             ]
 
     sim = _FakeSim()
+    norm_calls: list[list[float]] = []
 
     monkeypatch.setattr(analysis, "_import_meep", lambda: _FakeMP())
     monkeypatch.setattr(analysis, "build_sim", lambda params, log: sim)
+    monkeypatch.setattr(
+        meep_k_points_module,
+        "_build_freq_imag_norm",
+        lambda freq_imag_values, colors_module: norm_calls.append(list(freq_imag_values)),
+    )
 
     state = ProjectState(
         analysis=AnalysisConfig(
@@ -796,9 +803,84 @@ def test_meep_k_points_emits_plot_and_csv(monkeypatch) -> None:
     assert result.plots[0].png_path
     assert result.plots[0].csv_path
     assert result.meta["primary_frequency"] == "0.2"
+    assert norm_calls == []
     csv_text = open(result.plots[0].csv_path, "r", encoding="utf-8").read()
     assert "k_index,kx,ky,mode,freq_real,freq_imag" in csv_text
     assert "0,0.0,0.0,1,0.2,0.01" in csv_text
+
+
+def test_meep_k_points_color_by_freq_imag_uses_colormap_and_colorbar(monkeypatch) -> None:
+    pytest.importorskip("matplotlib")
+    from matplotlib import colors as mcolors
+    from matplotlib.figure import Figure
+
+    class _FakeVector3:
+        def __init__(self, x=0.0, y=0.0, z=0.0) -> None:
+            self.x = x
+            self.y = y
+            self.z = z
+
+    class _FakeMP:
+        @staticmethod
+        def Vector3(x=0.0, y=0.0, z=0.0):
+            return _FakeVector3(x, y, z)
+
+    class _FakeSim:
+        def run_k_points(self, run_time, points):
+            return [[0.2 + 0.01j, 0.3 - 0.02j], [0.25 + 0.0j]]
+
+    norm_calls: list[list[float]] = []
+    colorbar_calls: list[bool] = []
+    original_colorbar = Figure.colorbar
+
+    monkeypatch.setattr(analysis, "_import_meep", lambda: _FakeMP())
+    monkeypatch.setattr(analysis, "build_sim", lambda params, log: _FakeSim())
+
+    def _capture_norm(freq_imag_values, colors_module):
+        norm_calls.append(list(freq_imag_values))
+        return mcolors.Normalize(vmin=min(freq_imag_values), vmax=max(freq_imag_values))
+
+    def _capture_colorbar(self, *args, **kwargs):
+        colorbar_calls.append(True)
+        return original_colorbar(self, *args, **kwargs)
+
+    monkeypatch.setattr(meep_k_points_module, "_build_freq_imag_norm", _capture_norm)
+    monkeypatch.setattr(Figure, "colorbar", _capture_colorbar)
+
+    state = ProjectState(
+        analysis=AnalysisConfig(
+            kind="meep_k_points",
+            meep_k_points=MeepKPointsConfig(
+                kpoint_interp="0",
+                run_time="300",
+                kpoints=[KPoint(kx="0", ky="0"), KPoint(kx="0.5", ky="0")],
+                color_by_freq_imag=True,
+            ),
+        ),
+        sources=[
+            SourceItem(
+                name="src",
+                kind="gaussian",
+                component="Ez",
+                props={"fcen": "0.15", "df": "0.1"},
+            )
+        ],
+    )
+
+    result = run_by_kind(state, _log, _no_cancel)
+
+    assert result.status == "completed"
+    assert norm_calls == [[0.01, -0.02, 0.0]]
+    assert colorbar_calls == [True]
+
+
+def test_meep_k_points_constant_freq_imag_norm_is_non_degenerate() -> None:
+    pytest.importorskip("matplotlib")
+    from matplotlib import colors as mcolors
+
+    norm = meep_k_points_module._build_freq_imag_norm([0.0, 0.0], mcolors)
+
+    assert norm.vmin < norm.vmax
 
 
 def test_create_domain_preview_artifacts_writes_single_preview_for_fdtd(tmp_path) -> None:

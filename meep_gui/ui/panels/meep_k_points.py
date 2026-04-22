@@ -43,6 +43,7 @@ class MeepKPointsPanel(QtWidgets.QWidget):
         self.k_table.horizontalHeader().setStretchLastSection(True)
         self.k_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.k_table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.color_by_freq_imag = QtWidgets.QCheckBox("Color Modes by Imaginary Part")
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.addLayout(form)
@@ -50,6 +51,7 @@ class MeepKPointsPanel(QtWidgets.QWidget):
         layout.addLayout(point_form)
         layout.addLayout(button_row)
         layout.addWidget(self.k_table)
+        layout.addWidget(self.color_by_freq_imag)
         layout.addStretch(1)
 
         self.add_k.clicked.connect(self._on_add)
@@ -58,6 +60,7 @@ class MeepKPointsPanel(QtWidgets.QWidget):
         self.k_table.itemSelectionChanged.connect(self._on_select)
         self.kpoint_interp.editingFinished.connect(self._auto_apply)
         self.run_time.editingFinished.connect(self._auto_apply)
+        self.color_by_freq_imag.toggled.connect(self._auto_apply)
 
     def _auto_apply(self) -> None:
         if not self._ready:
@@ -94,6 +97,7 @@ class MeepKPointsPanel(QtWidgets.QWidget):
             kpoints=list(current.kpoints if kpoints is None else kpoints),
             output_dir=current.output_dir,
             output_prefix=current.output_prefix,
+            color_by_freq_imag=self.color_by_freq_imag.isChecked(),
         )
 
     def _on_add(self) -> None:
@@ -135,6 +139,7 @@ class MeepKPointsPanel(QtWidgets.QWidget):
         self._ready = False
         self.kpoint_interp.setText(cfg.kpoint_interp)
         self.run_time.setText(cfg.run_time)
+        self.color_by_freq_imag.setChecked(cfg.color_by_freq_imag)
         self.k_table.setRowCount(0)
         for kp in cfg.kpoints:
             row = self.k_table.rowCount()

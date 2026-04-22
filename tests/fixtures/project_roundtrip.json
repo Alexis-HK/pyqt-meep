@@ -141,7 +141,8 @@
         }
       ],
       "output_dir": "",
-      "output_prefix": "meep_k_points"
+      "output_prefix": "meep_k_points",
+      "color_by_freq_imag": true
     },
     "mpb_modesolver": {
       "lattice_x": "1",

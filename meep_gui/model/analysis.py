@@ -78,6 +78,7 @@ class MeepKPointsConfig:
     kpoints: list[KPoint] = field(default_factory=list)
     output_dir: str = ""
     output_prefix: str = "meep_k_points"
+    color_by_freq_imag: bool = False
 
 
 @dataclass(frozen=True)

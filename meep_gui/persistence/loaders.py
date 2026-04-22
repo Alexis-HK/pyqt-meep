@@ -203,6 +203,7 @@ def load_meep_k_points(raw: dict | None) -> MeepKPointsConfig:
         kpoints=kpoints,
         output_dir=as_str(raw.get("output_dir", ""), ""),
         output_prefix=as_str(raw.get("output_prefix", "meep_k_points"), "meep_k_points"),
+        color_by_freq_imag=normalize_bool(raw.get("color_by_freq_imag", False), False),
     )
 
 

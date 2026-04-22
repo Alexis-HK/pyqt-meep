@@ -328,10 +328,45 @@ def test_meep_k_points_script_emits_run_k_points_plot_and_csv() -> None:
     assert "run_domain_preview_out = os.path.join(out_dir, 'domain_preview.png')" in code
     assert "writer.writerow(['k_index', 'kx', 'ky', 'mode', 'freq_real', 'freq_imag'])" in code
     assert "plt.xlabel('k-index')" in code
+    assert "scatter_imag.append(float(cval.imag))" in code
     assert "plt.scatter(scatter_x, scatter_y, s=18, color='#1f77b4')" in code
+    assert "plt.colorbar(scatter)" not in code
     assert "sim.add_flux" not in code
     assert "for monitor_name, monitor_obj in flux_monitors:" not in code
     assert "plt.xticks(" not in code
+
+
+def test_meep_k_points_script_emits_imaginary_frequency_colormap_when_enabled() -> None:
+    state = ProjectState(
+        sources=[
+            SourceItem(
+                name="pulse",
+                kind="gaussian",
+                component="Ez",
+                props={"fcen": "0.2", "df": "0.1"},
+            )
+        ],
+        analysis=AnalysisConfig(
+            kind="meep_k_points",
+            meep_k_points=MeepKPointsConfig(
+                kpoint_interp="19",
+                run_time="300",
+                kpoints=[KPoint(kx="0", ky="0"), KPoint(kx="0.5", ky="0")],
+                color_by_freq_imag=True,
+            ),
+        ),
+    )
+
+    code = generate_script(state)
+
+    assert "from matplotlib import colors as mcolors" in code
+    assert "imag_min = min(scatter_imag)" in code
+    assert "imag_delta = max(abs(imag_min) * 1e-9, 1e-12)" in code
+    assert "c=scatter_imag," in code
+    assert "cmap='coolwarm'" in code
+    assert "norm=mcolors.Normalize(vmin=imag_min, vmax=imag_max)" in code
+    assert "colorbar = plt.colorbar(scatter)" in code
+    assert "colorbar.set_label('Imaginary Frequency')" in code
 
 
 def test_meep_k_points_script_uses_raw_points_when_interp_is_zero() -> None:
