@@ -6,7 +6,7 @@ from ...model import GeometryItem
 from ...primitives import GEOMETRY_REGISTRY, geometry_kind
 from ...store import ProjectStore
 from ...validation import validate_name, validate_numeric_expression
-from ..common import _log_error, _mark_row_warning, _set_invalid
+from ..common import _log_error, _mark_row_warning, _set_form_row_visible, _set_invalid
 from ..dialogs import GeometryEditDialog
 from ..scope import active_scope, parameter_names
 
@@ -34,15 +34,15 @@ class GeometryTab(QtWidgets.QWidget):
             "radius": self.radius,
         }
 
-        form = QtWidgets.QFormLayout()
-        form.addRow("Name", self.name_input)
-        form.addRow("Type", self.kind_input)
-        form.addRow("Material", self.material_input)
-        form.addRow("Center X", self.center_x)
-        form.addRow("Center Y", self.center_y)
-        form.addRow("Size X", self.size_x)
-        form.addRow("Size Y", self.size_y)
-        form.addRow("Radius", self.radius)
+        self.form = QtWidgets.QFormLayout()
+        self.form.addRow("Name", self.name_input)
+        self.form.addRow("Type", self.kind_input)
+        self.form.addRow("Material", self.material_input)
+        self.form.addRow("Center X", self.center_x)
+        self.form.addRow("Center Y", self.center_y)
+        self.form.addRow("Size X", self.size_x)
+        self.form.addRow("Size Y", self.size_y)
+        self.form.addRow("Radius", self.radius)
 
         self.add_button = QtWidgets.QPushButton("Add")
         self.update_button = QtWidgets.QPushButton("Update")
@@ -60,7 +60,7 @@ class GeometryTab(QtWidgets.QWidget):
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
 
         layout = QtWidgets.QVBoxLayout(self)
-        layout.addLayout(form)
+        layout.addLayout(self.form)
         layout.addLayout(btn_row)
         layout.addWidget(self.table)
 
@@ -81,9 +81,9 @@ class GeometryTab(QtWidgets.QWidget):
         return -1
 
     def _sync_kind_fields(self, kind: str) -> None:
-        enabled = {field.field_id for field in geometry_kind(kind).fields}
+        visible_fields = {field.field_id for field in geometry_kind(kind).fields}
         for field_id, widget in self._prop_widgets.items():
-            widget.setEnabled(field_id in enabled)
+            _set_form_row_visible(self.form, widget, field_id in visible_fields)
 
     def _validate(self, name: str, kind: str, material: str, row: int) -> bool:
         scope = active_scope(self.store)

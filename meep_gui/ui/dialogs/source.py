@@ -6,7 +6,7 @@ from ...model import FIELD_COMPONENTS, SourceItem
 from ...primitives import SOURCE_REGISTRY, source_kind
 from ...store import ProjectStore
 from ...validation import validate_name, validate_numeric_expression
-from ..common import _log_error, _set_invalid
+from ..common import _log_error, _set_form_row_visible, _set_invalid
 from ..scope import active_scope, parameter_names
 
 
@@ -40,16 +40,16 @@ class SourceEditDialog(QtWidgets.QDialog):
             "df": self.df,
         }
 
-        form = QtWidgets.QFormLayout()
-        form.addRow("Name", self.name_input)
-        form.addRow("Type", self.kind_input)
-        form.addRow("Component", self.component_input)
-        form.addRow("Center X", self.center_x)
-        form.addRow("Center Y", self.center_y)
-        form.addRow("Size X", self.size_x)
-        form.addRow("Size Y", self.size_y)
-        form.addRow("Frequency", self.fcen)
-        form.addRow("Bandwidth", self.df)
+        self.form = QtWidgets.QFormLayout()
+        self.form.addRow("Name", self.name_input)
+        self.form.addRow("Type", self.kind_input)
+        self.form.addRow("Component", self.component_input)
+        self.form.addRow("Center X", self.center_x)
+        self.form.addRow("Center Y", self.center_y)
+        self.form.addRow("Size X", self.size_x)
+        self.form.addRow("Size Y", self.size_y)
+        self.form.addRow("Frequency", self.fcen)
+        self.form.addRow("Bandwidth", self.df)
 
         self.save_button = QtWidgets.QPushButton("Save")
         self.cancel_button = QtWidgets.QPushButton("Cancel")
@@ -59,7 +59,7 @@ class SourceEditDialog(QtWidgets.QDialog):
         btn_row.addWidget(self.cancel_button)
 
         layout = QtWidgets.QVBoxLayout(self)
-        layout.addLayout(form)
+        layout.addLayout(self.form)
         layout.addLayout(btn_row)
 
         self.kind_input.currentTextChanged.connect(self._sync_kind_fields)
@@ -72,9 +72,9 @@ class SourceEditDialog(QtWidgets.QDialog):
         return self._result
 
     def _sync_kind_fields(self, kind: str) -> None:
-        enabled = {field.field_id for field in source_kind(kind).fields}
+        visible_fields = {field.field_id for field in source_kind(kind).fields}
         for field_id, widget in self._prop_widgets.items():
-            widget.setEnabled(field_id in enabled)
+            _set_form_row_visible(self.form, widget, field_id in visible_fields)
 
     def _on_save(self) -> None:
         name = self.name_input.text().strip()

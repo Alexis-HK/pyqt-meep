@@ -18,6 +18,17 @@ def _log_error(store: ProjectStore, message: str, parent: QtWidgets.QWidget) -> 
     QtWidgets.QMessageBox.warning(parent, "Invalid input", message)
 
 
+def _set_form_row_visible(
+    form: QtWidgets.QFormLayout,
+    field: QtWidgets.QWidget,
+    visible: bool,
+) -> None:
+    label = form.labelForField(field)
+    if label is not None:
+        label.setVisible(visible)
+    field.setVisible(visible)
+
+
 def format_run_list_label(run: RunRecord) -> str:
     prefix = run.meta.get("sweep_label", "").strip()
     label = f"{run.analysis_kind} [{run.status}] {run.created_at or run.run_id}"

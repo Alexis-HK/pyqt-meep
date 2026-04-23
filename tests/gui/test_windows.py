@@ -13,6 +13,7 @@ from meep_gui.model import (
     AnalysisConfig,
     FrequencyDomainSolverConfig,
     FluxMonitorConfig,
+    GeometryItem,
     KPoint,
     MeepKPointsConfig,
     MpbModeSolverConfig,
@@ -30,6 +31,8 @@ from meep_gui.model import (
 from meep_gui.script import generate_script
 from meep_gui.store import ProjectStore
 import meep_gui.preview.domain as domain_preview_module
+from meep_gui.ui.dialogs.geometry import GeometryEditDialog
+from meep_gui.ui.dialogs.source import SourceEditDialog
 from meep_gui.ui.panels.field_animation import FieldAnimationPanel
 from meep_gui.ui.dialogs.symmetry import SymmetryEditDialog
 from meep_gui.ui.panels.frequency_domain import FrequencyDomainPanel
@@ -42,10 +45,26 @@ import meep_gui.ui.tabs.analysis as analysis_tab_module
 from meep_gui.ui.tabs.domain import DomainTab
 import meep_gui.ui.tabs.domain as domain_tab_module
 from meep_gui.ui.tabs.flux_monitors import FluxMonitorsTab
+from meep_gui.ui.tabs.geometry import GeometryTab
 from meep_gui.ui.tabs.parameters import ParametersTab
+from meep_gui.ui.tabs.sources import SourcesTab
 from meep_gui.ui.tabs.sweep import SweepTab
 import meep_gui.ui.tabs.sweep as sweep_tab_module
 from meep_gui.ui.windows import DomainWindow, OutputWindow
+
+
+def _assert_form_row_hidden(form: QtWidgets.QFormLayout, field: QtWidgets.QWidget) -> None:
+    label = form.labelForField(field)
+    assert label is not None
+    assert field.isHidden()
+    assert label.isHidden()
+
+
+def _assert_form_row_visible(form: QtWidgets.QFormLayout, field: QtWidgets.QWidget) -> None:
+    label = form.labelForField(field)
+    assert label is not None
+    assert not field.isHidden()
+    assert not label.isHidden()
 
 
 def test_analysis_tab_run_and_result_record(qtbot, monkeypatch) -> None:
@@ -1464,3 +1483,111 @@ def test_parameters_tab_import_overwrites_and_invalid_import_is_atomic(
     assert [(p.name, p.expr) for p in store.state.parameters] == [("a", "1"), ("b", "a + sqrt(4)")]
     assert warning_calls
     assert "Parameter import failed: Line 2: blank lines are not allowed." in warning_calls[-1][1]
+
+
+def test_geometry_tab_hides_irrelevant_rows_and_preserves_switched_values(qtbot) -> None:
+    store = ProjectStore()
+    tab = GeometryTab(store)
+    qtbot.addWidget(tab)
+    tab.show()
+
+    _assert_form_row_visible(tab.form, tab.radius)
+    _assert_form_row_hidden(tab.form, tab.size_x)
+    _assert_form_row_hidden(tab.form, tab.size_y)
+
+    tab.radius.setText("2.5")
+    tab.kind_input.setCurrentText("block")
+
+    _assert_form_row_hidden(tab.form, tab.radius)
+    _assert_form_row_visible(tab.form, tab.size_x)
+    _assert_form_row_visible(tab.form, tab.size_y)
+
+    tab.kind_input.setCurrentText("circle")
+    _assert_form_row_visible(tab.form, tab.radius)
+    assert tab.radius.text() == "2.5"
+
+
+def test_sources_tab_hides_irrelevant_rows_and_preserves_switched_values(qtbot) -> None:
+    store = ProjectStore()
+    tab = SourcesTab(store)
+    qtbot.addWidget(tab)
+    tab.show()
+
+    _assert_form_row_visible(tab.form, tab.center_x)
+    _assert_form_row_visible(tab.form, tab.center_y)
+    _assert_form_row_visible(tab.form, tab.size_x)
+    _assert_form_row_visible(tab.form, tab.size_y)
+    _assert_form_row_visible(tab.form, tab.fcen)
+    _assert_form_row_hidden(tab.form, tab.df)
+
+    tab.kind_input.setCurrentText("gaussian")
+    tab.df.setText("0.15")
+
+    _assert_form_row_visible(tab.form, tab.df)
+    _assert_form_row_visible(tab.form, tab.fcen)
+
+    tab.kind_input.setCurrentText("continuous")
+    _assert_form_row_hidden(tab.form, tab.df)
+    _assert_form_row_visible(tab.form, tab.fcen)
+
+    tab.kind_input.setCurrentText("gaussian")
+    _assert_form_row_visible(tab.form, tab.df)
+    assert tab.df.text() == "0.15"
+
+
+def test_geometry_edit_dialog_hides_irrelevant_rows_and_preserves_switched_values(qtbot) -> None:
+    store = ProjectStore()
+    dialog = GeometryEditDialog(
+        store,
+        GeometryItem(
+            name="disk",
+            kind="circle",
+            material="glass",
+            props={"radius": "1.2", "center_x": "0", "center_y": "0"},
+        ),
+    )
+    qtbot.addWidget(dialog)
+    dialog.show()
+
+    _assert_form_row_visible(dialog.form, dialog.radius)
+    _assert_form_row_hidden(dialog.form, dialog.size_x)
+    _assert_form_row_hidden(dialog.form, dialog.size_y)
+
+    dialog.radius.setText("3.4")
+    dialog.kind_input.setCurrentText("block")
+    _assert_form_row_hidden(dialog.form, dialog.radius)
+    _assert_form_row_visible(dialog.form, dialog.size_x)
+    _assert_form_row_visible(dialog.form, dialog.size_y)
+
+    dialog.kind_input.setCurrentText("circle")
+    _assert_form_row_visible(dialog.form, dialog.radius)
+    assert dialog.radius.text() == "3.4"
+
+
+def test_source_edit_dialog_hides_irrelevant_rows_and_preserves_switched_values(qtbot) -> None:
+    store = ProjectStore()
+    dialog = SourceEditDialog(
+        store,
+        SourceItem(
+            name="src",
+            kind="continuous",
+            component="Ez",
+            props={"center_x": "0", "center_y": "0", "size_x": "1", "size_y": "0", "fcen": "0.2"},
+        ),
+    )
+    qtbot.addWidget(dialog)
+    dialog.show()
+
+    _assert_form_row_hidden(dialog.form, dialog.df)
+    _assert_form_row_visible(dialog.form, dialog.fcen)
+
+    dialog.kind_input.setCurrentText("gaussian")
+    dialog.df.setText("0.08")
+    _assert_form_row_visible(dialog.form, dialog.df)
+
+    dialog.kind_input.setCurrentText("continuous")
+    _assert_form_row_hidden(dialog.form, dialog.df)
+
+    dialog.kind_input.setCurrentText("gaussian")
+    _assert_form_row_visible(dialog.form, dialog.df)
+    assert dialog.df.text() == "0.08"
