@@ -16,6 +16,7 @@ from ..types import (
     ValidationIssue,
 )
 from .base import BaseRecipe
+from .capabilities import extract_scene_features
 
 
 class MeepKPointsRecipe(BaseRecipe):
@@ -52,15 +53,8 @@ class MeepKPointsRecipe(BaseRecipe):
         target: AnalysisTarget,
     ) -> tuple[ValidationIssue, ...]:
         issues: list[ValidationIssue] = []
-        if not state.sources:
-            issues.append(
-                ValidationIssue(
-                    severity="error",
-                    message="Meep k points requires at least one Gaussian (pulsed) source.",
-                    code="meep_k_points:sources",
-                )
-            )
-        elif any(src.kind == "continuous" for src in state.sources):
+        features = extract_scene_features(scene=plan.scene, transmission=plan.transmission)
+        if SceneFeature.CONTINUOUS_SOURCES in features:
             issues.append(
                 ValidationIssue(
                     severity="error",
@@ -70,6 +64,14 @@ class MeepKPointsRecipe(BaseRecipe):
                     ),
                     code="meep_k_points:source_kind",
                     feature=SceneFeature.CONTINUOUS_SOURCES.value,
+                )
+            )
+        elif SceneFeature.GAUSSIAN_SOURCES not in features:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    message="Meep k points requires at least one Gaussian (pulsed) source.",
+                    code="meep_k_points:sources",
                 )
             )
         if len(state.analysis.meep_k_points.kpoints) < 2:

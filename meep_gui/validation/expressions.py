@@ -156,6 +156,119 @@ def evaluate_numeric_expression(expr: str, variables: dict[str, float]) -> float
         raise ValueError(f"Invalid expression: {expr}") from exc
 
 
+def _check_complex_node(node: ast.AST, allowed_names: set[str]) -> None:
+    if isinstance(node, ast.Expression):
+        _check_complex_node(node.body, allowed_names)
+        return
+    if isinstance(node, ast.BinOp):
+        if not isinstance(node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow)):
+            raise ValueError("Unsupported operator.")
+        _check_complex_node(node.left, allowed_names)
+        _check_complex_node(node.right, allowed_names)
+        return
+    if isinstance(node, ast.UnaryOp):
+        if not isinstance(node.op, (ast.UAdd, ast.USub)):
+            raise ValueError("Unsupported unary operator.")
+        _check_complex_node(node.operand, allowed_names)
+        return
+    if isinstance(node, ast.Call):
+        if not isinstance(node.func, ast.Name):
+            raise ValueError("Unsupported function call.")
+        func_name = node.func.id
+        if func_name not in _ALLOWED_FUNCTIONS:
+            raise ValueError(f"Unknown function: {func_name}")
+        allowed_counts = _FUNC_ARG_COUNTS[func_name]
+        if len(node.args) not in allowed_counts:
+            counts = ", ".join(str(c) for c in allowed_counts)
+            raise ValueError(f"Function '{func_name}' requires {counts} arguments.")
+        for arg in node.args:
+            _check_complex_node(arg, allowed_names)
+        return
+    if isinstance(node, ast.Name):
+        if node.id in _ALLOWED_FUNCTIONS:
+            raise ValueError(f"Function '{node.id}' must be called with ().")
+        if node.id not in allowed_names:
+            raise ValueError(f"Unknown name: {node.id}")
+        return
+    if isinstance(node, ast.Constant):
+        value = node.value
+        if isinstance(value, bool):
+            raise ValueError("Unsupported constant.")
+        if not isinstance(value, (int, float, complex)):
+            raise ValueError("Unsupported constant.")
+        return
+    raise ValueError("Unsupported expression.")
+
+
+def _parse_complex_expr(
+    expr: str,
+    allowed_names: set[str],
+) -> ast.Expression:
+    prepared = _prepare_expr(expr)
+    try:
+        tree = ast.parse(prepared, mode="eval")
+    except SyntaxError as exc:
+        raise ValueError("Invalid expression.") from exc
+    _check_complex_node(tree, allowed_names)
+    return tree
+
+
+def validate_complex_expression(expr: str, allowed_names: Iterable[str]) -> ValidationResult:
+    try:
+        _parse_complex_expr(expr, set(allowed_names))
+    except ValueError as exc:
+        return ValidationResult(False, str(exc))
+    return ValidationResult(True, "")
+
+
+def evaluate_complex_expression(expr: str, variables: dict[str, float]) -> complex:
+    tree = _parse_complex_expr(expr, set(variables.keys()))
+
+    def _real_arg(value: complex, expr: str) -> float:
+        if abs(value.imag) > 1e-15:
+            raise ValueError(f"Invalid expression: {expr}")
+        return float(value.real)
+
+    def _eval(node: ast.AST) -> complex:
+        if isinstance(node, ast.Expression):
+            return _eval(node.body)
+        if isinstance(node, ast.BinOp):
+            left = _eval(node.left)
+            right = _eval(node.right)
+            if isinstance(node.op, ast.Add):
+                return left + right
+            if isinstance(node.op, ast.Sub):
+                return left - right
+            if isinstance(node.op, ast.Mult):
+                return left * right
+            if isinstance(node.op, ast.Div):
+                return left / right
+            if isinstance(node.op, ast.Pow):
+                return left ** right
+        if isinstance(node, ast.UnaryOp):
+            value = _eval(node.operand)
+            if isinstance(node.op, ast.UAdd):
+                return +value
+            if isinstance(node.op, ast.USub):
+                return -value
+        if isinstance(node, ast.Call):
+            func = _ALLOWED_FUNCTIONS[node.func.id]
+            args = [_real_arg(_eval(arg), expr) for arg in node.args]
+            return complex(func(*args))
+        if isinstance(node, ast.Name):
+            return complex(float(variables[node.id]))
+        if isinstance(node, ast.Constant):
+            return complex(node.value)
+        raise ValueError("Unsupported expression.")
+
+    try:
+        return complex(_eval(tree))
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError(f"Invalid expression: {expr}") from exc
+
+
 def _normalize_complex_literal(expr: str) -> str:
     if expr is None:
         raise ValueError(_COMPLEX_LITERAL_ERROR)

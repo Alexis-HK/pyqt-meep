@@ -89,6 +89,58 @@ def test_field_animation_script_emits_k_point_when_periodic_enabled() -> None:
     assert "k_point=mp.Vector3(0.1, 0.2, 0.3)" in code
 
 
+def test_gaussian_beam_script_defines_disabled_temporal_source_without_appending() -> None:
+    state = ProjectState(
+        parameters=[Parameter(name="amp", expr="2")],
+        sources=[
+            SourceItem(
+                name="pulse",
+                kind="gaussian",
+                component="Ez",
+                props={
+                    "center_x": "0",
+                    "center_y": "0",
+                    "size_x": "0",
+                    "size_y": "1",
+                    "fcen": "0.2",
+                    "df": "0.1",
+                },
+                enabled=False,
+            ),
+            SourceItem(
+                name="beam",
+                kind="gaussian_beam",
+                component="Ez",
+                props={
+                    "src": "pulse",
+                    "center_x": "0",
+                    "center_y": "0",
+                    "size_x": "1",
+                    "size_y": "0",
+                    "beam_x0_x": "0",
+                    "beam_x0_y": "1",
+                    "beam_kdir_x": "0",
+                    "beam_kdir_y": "1",
+                    "beam_w0": "0.8",
+                    "beam_e0_x": "0",
+                    "beam_e0_y": "0",
+                    "beam_e0_z": "amp*(1+1j)/sqrt(2)",
+                },
+            ),
+        ],
+        analysis=AnalysisConfig(kind="field_animation"),
+    )
+
+    code = generate_script(state)
+
+    assert "sources_1 = mp.Source(mp.GaussianSource(frequency=0.2, fwidth=0.1)" in code
+    assert "sources.append(sources_1)" not in code
+    assert "sources_2 = mp.GaussianBeamSource(" in code
+    assert "src=mp.GaussianSource(frequency=0.2, fwidth=0.1)," in code
+    assert "beam_E0=mp.Vector3(0, 0, amp*(1+1j)/sqrt(2))" in code
+    assert "sources.append(sources_2)" in code
+
+
 def test_harminv_script_emits_flux_png_exports_when_monitors_exist() -> None:
     state = ProjectState(
         flux_monitors=[FluxMonitorConfig(name="tx")],

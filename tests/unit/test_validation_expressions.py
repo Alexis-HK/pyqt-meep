@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from meep_gui.validation import (
+    evaluate_complex_expression,
     evaluate_numeric_expression,
     parse_complex_literal,
+    validate_complex_expression,
     validate_complex_literal,
     validate_numeric_expression,
 )
@@ -22,6 +24,22 @@ def test_validate_numeric_expression_rejects_unknown_name() -> None:
 def test_evaluate_numeric_expression_with_variables() -> None:
     value = evaluate_numeric_expression("a*2 + log10(100)", {"a": 3.0})
     assert abs(value - 8.0) < 1e-9
+
+
+def test_evaluate_complex_expression_accepts_parameters_and_literals() -> None:
+    result = validate_complex_expression("amp * (1 + 1j) / sqrt(2)", ["amp"])
+    value = evaluate_complex_expression("amp * (1 + 1j) / sqrt(2)", {"amp": 2.0})
+
+    assert result.ok
+    assert abs(value.real - 2**0.5) < 1e-9
+    assert abs(value.imag - 2**0.5) < 1e-9
+
+
+def test_validate_complex_expression_rejects_unknown_names() -> None:
+    result = validate_complex_expression("missing + 1j", [])
+
+    assert not result.ok
+    assert "Unknown name" in result.message
 
 
 def test_validate_complex_literal_accepts_supported_literals() -> None:

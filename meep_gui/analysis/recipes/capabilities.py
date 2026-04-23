@@ -89,9 +89,18 @@ def extract_scene_features(
         features.add(SceneFeature.TRANSMISSION_REFERENCE_SCENE)
 
     for compiled_scene in scenes:
-        if any(source.kind == "continuous" for source in compiled_scene.sources):
+        enabled_sources = [source for source in compiled_scene.sources if source.enabled]
+        if any(
+            source.kind == "continuous"
+            or (source.kind == "gaussian_beam" and source.source_time_kind == "continuous")
+            for source in enabled_sources
+        ):
             features.add(SceneFeature.CONTINUOUS_SOURCES)
-        if any(source.kind == "gaussian" for source in compiled_scene.sources):
+        if any(
+            source.kind == "gaussian"
+            or (source.kind == "gaussian_beam" and source.source_time_kind == "gaussian")
+            for source in enabled_sources
+        ):
             features.add(SceneFeature.GAUSSIAN_SOURCES)
         if compiled_scene.monitors:
             features.add(SceneFeature.FLUX_MONITORS)

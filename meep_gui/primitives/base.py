@@ -15,6 +15,7 @@ class PrimitiveField:
     field_id: str
     label: str
     default: str = ""
+    value_type: str = "numeric"
 
 
 @dataclass(frozen=True)
@@ -56,4 +57,3 @@ class MonitorKindSpec:
     compile_scene_monitor: Callable[[Any], "MonitorSpec"]
     to_flux_spec: Callable[["MonitorSpec", "CompilationContext", SceneEvalFn], Any]
     script_add_flux_expr: Callable[[str, "MonitorSpec"], str]
-

@@ -65,6 +65,7 @@ def load_sources(raw: list[dict]) -> list[SourceItem]:
             kind=item.get("kind", ""),
             component=item.get("component", "Ez"),
             props=item.get("props", {}) or {},
+            enabled=normalize_bool(item.get("enabled", True), True),
         )
         for item in raw
     ]

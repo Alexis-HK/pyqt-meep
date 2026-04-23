@@ -81,6 +81,33 @@ def test_absent_new_sections_fixture_keeps_defaults() -> None:
     assert state.analysis.mpb_modesolver.field_kpoints == []
 
 
+def test_source_enabled_defaults_true_and_roundtrips() -> None:
+    raw = _load_fixture("minimal_analysis.json")
+    raw["sources"] = [
+        {
+            "name": "src_old",
+            "kind": "continuous",
+            "component": "Ez",
+            "props": {"fcen": "0.2"},
+        },
+        {
+            "name": "src_off",
+            "kind": "gaussian",
+            "component": "Ez",
+            "enabled": False,
+            "props": {"fcen": "0.2", "df": "0.1"},
+        },
+    ]
+
+    state = state_from_dict(raw)
+    dumped = state_to_dict(state)
+
+    assert state.sources[0].enabled is True
+    assert state.sources[1].enabled is False
+    assert dumped["sources"][0]["enabled"] is True
+    assert dumped["sources"][1]["enabled"] is False
+
+
 def test_invalid_symmetry_fixture_normalizes_to_safe_defaults() -> None:
     state = state_from_dict(_load_fixture("invalid_symmetry.json"))
 

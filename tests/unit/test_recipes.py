@@ -145,3 +145,52 @@ def test_prepare_runtime_analysis_for_meep_k_points_keeps_current_config_shape()
 
     assert prepared.recipe.recipe_id == state.analysis.kind
     assert prepared.validation.ok
+
+
+def test_disabled_gaussian_source_does_not_block_frequency_domain_solver() -> None:
+    state = ProjectState(
+        analysis=AnalysisConfig(kind="frequency_domain_solver"),
+        sources=[
+            SourceItem(
+                name="pulse",
+                kind="gaussian",
+                component="Ez",
+                props={"fcen": "0.2", "df": "0.1"},
+                enabled=False,
+            )
+        ],
+    )
+
+    prepared = prepare_runtime_analysis(state)
+
+    assert prepared.validation.ok
+
+
+def test_gaussian_beam_inherits_temporal_source_capability() -> None:
+    state = ProjectState(
+        analysis=AnalysisConfig(
+            kind="meep_k_points",
+            meep_k_points=MeepKPointsConfig(
+                kpoints=[KPoint(kx="0", ky="0"), KPoint(kx="0.5", ky="0")]
+            ),
+        ),
+        sources=[
+            SourceItem(
+                name="pulse",
+                kind="gaussian",
+                component="Ez",
+                props={"fcen": "0.2", "df": "0.1"},
+                enabled=False,
+            ),
+            SourceItem(
+                name="beam",
+                kind="gaussian_beam",
+                component="Ez",
+                props={"src": "pulse"},
+            ),
+        ],
+    )
+
+    prepared = prepare_runtime_analysis(state)
+
+    assert prepared.validation.ok

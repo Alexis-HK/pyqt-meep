@@ -1535,6 +1535,41 @@ def test_sources_tab_hides_irrelevant_rows_and_preserves_switched_values(qtbot) 
     assert tab.df.text() == "0.15"
 
 
+def test_sources_tab_adds_gaussian_beam_with_disabled_source_time(qtbot) -> None:
+    store = ProjectStore()
+    store.state.sources.append(
+        SourceItem(
+            name="pulse",
+            kind="gaussian",
+            component="Ez",
+            props={"fcen": "0.2", "df": "0.1"},
+            enabled=False,
+        )
+    )
+    tab = SourcesTab(store)
+    qtbot.addWidget(tab)
+    tab.show()
+
+    tab.name_input.setText("beam")
+    tab.kind_input.setCurrentText("gaussian_beam")
+
+    _assert_form_row_visible(tab.form, tab.src_name)
+    _assert_form_row_hidden(tab.form, tab.component_input)
+    _assert_form_row_hidden(tab.form, tab.fcen)
+    _assert_form_row_visible(tab.form, tab.beam_e0_z)
+    assert [tab.src_name.itemText(i) for i in range(tab.src_name.count())] == ["pulse"]
+    assert tab.beam_kdir_y.text() == "1"
+    assert tab.beam_e0_z.text() == "1"
+
+    qtbot.mouseClick(tab.add_button, QtCore.Qt.LeftButton)
+
+    assert len(store.state.sources) == 2
+    assert store.state.sources[1].kind == "gaussian_beam"
+    assert store.state.sources[1].enabled is True
+    assert store.state.sources[1].props["src"] == "pulse"
+    assert tab.table.item(1, 0).text() == "ON"
+
+
 def test_geometry_edit_dialog_hides_irrelevant_rows_and_preserves_switched_values(qtbot) -> None:
     store = ProjectStore()
     dialog = GeometryEditDialog(
@@ -1591,3 +1626,42 @@ def test_source_edit_dialog_hides_irrelevant_rows_and_preserves_switched_values(
     dialog.kind_input.setCurrentText("gaussian")
     _assert_form_row_visible(dialog.form, dialog.df)
     assert dialog.df.text() == "0.08"
+
+
+def test_source_edit_dialog_edits_gaussian_beam_on_flag_and_complex_e0(qtbot) -> None:
+    store = ProjectStore()
+    store.state.sources.extend(
+        [
+            SourceItem(
+                name="pulse",
+                kind="gaussian",
+                component="Ez",
+                props={"fcen": "0.2", "df": "0.1"},
+                enabled=False,
+            ),
+            SourceItem(
+                name="beam",
+                kind="gaussian_beam",
+                component="Ez",
+                props={"src": "pulse", "beam_e0_z": "1j"},
+                enabled=False,
+            ),
+        ]
+    )
+    dialog = SourceEditDialog(store, store.state.sources[1])
+    qtbot.addWidget(dialog)
+    dialog.show()
+
+    _assert_form_row_visible(dialog.form, dialog.src_name)
+    _assert_form_row_hidden(dialog.form, dialog.component_input)
+    assert dialog.enabled_input.isChecked() is False
+    assert dialog.src_name.currentText() == "pulse"
+    assert dialog.beam_e0_z.text() == "1j"
+
+    dialog.enabled_input.setChecked(True)
+    qtbot.mouseClick(dialog.save_button, QtCore.Qt.LeftButton)
+
+    assert dialog.result is not None
+    assert dialog.result.enabled is True
+    assert dialog.result.props["src"] == "pulse"
+    assert dialog.result.props["beam_e0_z"] == "1j"

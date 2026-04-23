@@ -16,6 +16,7 @@ from ..types import (
     ValidationIssue,
 )
 from .base import BaseRecipe
+from .capabilities import extract_scene_features
 
 
 class TransmissionSpectrumRecipe(BaseRecipe):
@@ -52,9 +53,8 @@ class TransmissionSpectrumRecipe(BaseRecipe):
     ) -> tuple[ValidationIssue, ...]:
         cfg = state.analysis.transmission_spectrum
         issues: list[ValidationIssue] = []
-        if any(src.kind == "continuous" for src in state.sources) or any(
-            src.kind == "continuous" for src in cfg.reference_state.sources
-        ):
+        features = extract_scene_features(scene=plan.scene, transmission=plan.transmission)
+        if SceneFeature.CONTINUOUS_SOURCES in features:
             issues.append(
                 ValidationIssue(
                     severity="error",

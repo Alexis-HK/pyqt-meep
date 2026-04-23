@@ -24,6 +24,15 @@ class SourceSpec:
     frequency: float = 0.15
     bandwidth: float = 0.0
     component: str = "Ez"
+    source_time_kind: str = ""
+    beam_x0_x: float = 0.0
+    beam_x0_y: float = 0.0
+    beam_kdir_x: float = 0.0
+    beam_kdir_y: float = 1.0
+    beam_w0: float = 1.0
+    beam_e0_x: complex = 0j
+    beam_e0_y: complex = 0j
+    beam_e0_z: complex = 1 + 0j
 
 
 @dataclass

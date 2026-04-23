@@ -49,6 +49,26 @@ def build_sim(params: SimParams, log: LogFn, *, force_complex_fields: bool = Fal
 
     sources = []
     for spec in params.sources:
+        if spec.kind == "gaussian_beam":
+            if spec.source_time_kind == "gaussian":
+                src_time = mp.GaussianSource(frequency=spec.frequency, fwidth=spec.bandwidth)
+            elif spec.source_time_kind == "continuous":
+                src_time = mp.ContinuousSource(frequency=spec.frequency)
+            else:
+                raise ValueError("Gaussian beam source references an unsupported SourceTime.")
+            sources.append(
+                mp.GaussianBeamSource(
+                    src=src_time,
+                    center=mp.Vector3(spec.center_x, spec.center_y, 0),
+                    size=mp.Vector3(spec.width_x, spec.width_y, 0),
+                    beam_x0=mp.Vector3(spec.beam_x0_x, spec.beam_x0_y, 0),
+                    beam_kdir=mp.Vector3(spec.beam_kdir_x, spec.beam_kdir_y, 0),
+                    beam_w0=spec.beam_w0,
+                    beam_E0=mp.Vector3(spec.beam_e0_x, spec.beam_e0_y, spec.beam_e0_z),
+                )
+            )
+            continue
+
         comp = components.get(spec.component, mp.Ez)
         if spec.kind == "gaussian":
             src = mp.GaussianSource(frequency=spec.frequency, fwidth=spec.bandwidth)

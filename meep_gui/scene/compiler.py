@@ -7,6 +7,7 @@ from ..primitives import (
     geometry_kind,
     material_kind,
     monitor_kind,
+    resolve_source_time_references,
     source_kind,
 )
 from ..validation import evaluate_parameters
@@ -120,6 +121,7 @@ def _compile_scene_spec(
         if item.component not in FIELD_COMPONENTS:
             raise ValueError(f"Unsupported field component: {item.component}")
         scene_sources.append(source_kind(item.kind).compile_scene_source(item))
+    scene_sources_tuple = resolve_source_time_references(scene_sources)
 
     scene_monitors_list = []
     for item in monitors:
@@ -154,6 +156,6 @@ def _compile_scene_spec(
         symmetries=scene_symmetries if normalized_domain.symmetry_enabled else (),
         media=scene_media,
         objects=tuple(scene_objects),
-        sources=tuple(scene_sources),
+        sources=scene_sources_tuple,
         monitors=tuple(scene_monitors_list),
     )

@@ -35,6 +35,7 @@ def scene_to_sim_params(scene: SceneSpec, context: CompilationContext) -> SimPar
     sources: list[SourceSpec] = [
         source_kind(item.kind).to_runtime_source(item, context, eval_required)
         for item in scene.sources
+        if item.enabled
     ]
 
     symmetries: list[SymmetrySpec] = []

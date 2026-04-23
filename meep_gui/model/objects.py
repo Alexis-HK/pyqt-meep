@@ -29,6 +29,7 @@ class SourceItem:
     kind: str
     component: str
     props: dict[str, str] = field(default_factory=dict)
+    enabled: bool = True
 
 
 @dataclass(frozen=True)

@@ -1,9 +1,11 @@
 from .errors import ValidationResult
 from .expressions import (
     ParameterEvalResult,
+    evaluate_complex_expression,
     evaluate_numeric_expression,
     evaluate_parameters,
     parse_complex_literal,
+    validate_complex_expression,
     validate_complex_literal,
     validate_numeric_expression,
 )
@@ -13,9 +15,11 @@ from .parameter_import import parse_parameter_import_text
 __all__ = [
     "ValidationResult",
     "ParameterEvalResult",
+    "evaluate_complex_expression",
     "evaluate_numeric_expression",
     "evaluate_parameters",
     "parse_complex_literal",
+    "validate_complex_expression",
     "validate_complex_literal",
     "validate_numeric_expression",
     "NameRegistry",

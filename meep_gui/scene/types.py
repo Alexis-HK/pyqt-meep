@@ -7,7 +7,7 @@ MediumKind = Literal["constant", "lossy_narrowband", "dispersive", "nonlinear", 
 GeometryKind = Literal["block", "circle", "polygon", "imported_polygon"]
 SpatialMaterialKind = Literal["uniform", "function", "grid"]
 EvolutionKind = Literal["static", "translate", "rotate", "keyframed", "scripted"]
-SourceKind = Literal["continuous", "gaussian"]
+SourceKind = Literal["continuous", "gaussian", "gaussian_beam"]
 MonitorKind = Literal["flux"]
 
 
@@ -101,6 +101,17 @@ class SourceSpec:
     size_y_expr: str
     frequency_expr: str
     bandwidth_expr: str = "0"
+    enabled: bool = True
+    source_time_kind: str = ""
+    source_time_ref: str = ""
+    beam_x0_x_expr: str = "0"
+    beam_x0_y_expr: str = "0"
+    beam_kdir_x_expr: str = "0"
+    beam_kdir_y_expr: str = "1"
+    beam_w0_expr: str = "1"
+    beam_e0_x_expr: str = "0"
+    beam_e0_y_expr: str = "0"
+    beam_e0_z_expr: str = "1"
 
 
 @dataclass(frozen=True)

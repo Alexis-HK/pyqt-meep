@@ -8,7 +8,7 @@ from .base import (
 from .geometry import GEOMETRY_REGISTRY, geometry_kind
 from .materials import DEFAULT_MATERIAL_KIND, MATERIAL_FIELDS, MATERIAL_REGISTRY, material_kind
 from .monitors import DEFAULT_MONITOR_KIND, MONITOR_REGISTRY, monitor_kind
-from .sources import SOURCE_REGISTRY, source_kind
+from .sources import SOURCE_REGISTRY, resolve_source_time_references, source_kind
 
 __all__ = [
     "DEFAULT_MATERIAL_KIND",
@@ -26,5 +26,6 @@ __all__ = [
     "geometry_kind",
     "material_kind",
     "monitor_kind",
+    "resolve_source_time_references",
     "source_kind",
 ]

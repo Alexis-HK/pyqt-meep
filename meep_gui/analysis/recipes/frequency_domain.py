@@ -16,6 +16,7 @@ from ..types import (
     ValidationIssue,
 )
 from .base import BaseRecipe
+from .capabilities import extract_scene_features
 
 
 class FrequencyDomainSolverRecipe(BaseRecipe):
@@ -51,7 +52,8 @@ class FrequencyDomainSolverRecipe(BaseRecipe):
         *,
         target: AnalysisTarget,
     ) -> tuple[ValidationIssue, ...]:
-        if any(src.kind != "continuous" for src in state.sources):
+        features = extract_scene_features(scene=plan.scene, transmission=plan.transmission)
+        if SceneFeature.GAUSSIAN_SOURCES in features:
             return (
                 ValidationIssue(
                     severity="error",
