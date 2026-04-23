@@ -152,6 +152,8 @@ def _compile_scene_spec(
             k_point_x_expr=normalized_domain.k_point_x,
             k_point_y_expr=normalized_domain.k_point_y,
             k_point_z_expr=normalized_domain.k_point_z,
+            cylindrical_enabled=normalized_domain.cylindrical_enabled,
+            cylindrical_m_expr=normalized_domain.cylindrical_m,
         ),
         symmetries=scene_symmetries if normalized_domain.symmetry_enabled else (),
         media=scene_media,

@@ -23,6 +23,7 @@ _FEATURE_LABELS: dict[SceneFeature, str] = {
     SceneFeature.GAUSSIAN_SOURCES: "Gaussian (pulsed) sources",
     SceneFeature.FLUX_MONITORS: "flux monitors",
     SceneFeature.DOMAIN_SYMMETRIES: "domain symmetries",
+    SceneFeature.CYLINDRICAL_COORDINATES: "cylindrical coordinates",
     SceneFeature.TRANSMISSION_REFERENCE_SCENE: "a transmission reference scene",
 }
 
@@ -40,6 +41,7 @@ _BACKEND_CAPABILITIES: dict[
         SceneFeature.GAUSSIAN_SOURCES: SupportStatus.SUPPORTED,
         SceneFeature.FLUX_MONITORS: SupportStatus.SUPPORTED,
         SceneFeature.DOMAIN_SYMMETRIES: SupportStatus.SUPPORTED,
+        SceneFeature.CYLINDRICAL_COORDINATES: SupportStatus.SUPPORTED,
         SceneFeature.TRANSMISSION_REFERENCE_SCENE: SupportStatus.SUPPORTED,
     },
     ("meep_fdtd", "script"): {
@@ -47,6 +49,7 @@ _BACKEND_CAPABILITIES: dict[
         SceneFeature.GAUSSIAN_SOURCES: SupportStatus.SUPPORTED,
         SceneFeature.FLUX_MONITORS: SupportStatus.SUPPORTED,
         SceneFeature.DOMAIN_SYMMETRIES: SupportStatus.SUPPORTED,
+        SceneFeature.CYLINDRICAL_COORDINATES: SupportStatus.SUPPORTED,
         SceneFeature.TRANSMISSION_REFERENCE_SCENE: SupportStatus.SUPPORTED,
     },
     ("mpb", "runtime"): {
@@ -54,6 +57,7 @@ _BACKEND_CAPABILITIES: dict[
         SceneFeature.GAUSSIAN_SOURCES: SupportStatus.IGNORED,
         SceneFeature.FLUX_MONITORS: SupportStatus.IGNORED,
         SceneFeature.DOMAIN_SYMMETRIES: SupportStatus.IGNORED,
+        SceneFeature.CYLINDRICAL_COORDINATES: SupportStatus.IGNORED,
         SceneFeature.TRANSMISSION_REFERENCE_SCENE: SupportStatus.FORBIDDEN,
     },
     ("mpb", "script"): {
@@ -61,6 +65,7 @@ _BACKEND_CAPABILITIES: dict[
         SceneFeature.GAUSSIAN_SOURCES: SupportStatus.IGNORED,
         SceneFeature.FLUX_MONITORS: SupportStatus.IGNORED,
         SceneFeature.DOMAIN_SYMMETRIES: SupportStatus.IGNORED,
+        SceneFeature.CYLINDRICAL_COORDINATES: SupportStatus.IGNORED,
         SceneFeature.TRANSMISSION_REFERENCE_SCENE: SupportStatus.FORBIDDEN,
     },
 }
@@ -106,6 +111,8 @@ def extract_scene_features(
             features.add(SceneFeature.FLUX_MONITORS)
         if compiled_scene.symmetries:
             features.add(SceneFeature.DOMAIN_SYMMETRIES)
+        if compiled_scene.domain.cylindrical_enabled:
+            features.add(SceneFeature.CYLINDRICAL_COORDINATES)
     return features
 
 

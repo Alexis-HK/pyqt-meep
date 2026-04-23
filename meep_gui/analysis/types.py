@@ -27,6 +27,7 @@ class SceneFeature(str, Enum):
     GAUSSIAN_SOURCES = "gaussian_sources"
     FLUX_MONITORS = "flux_monitors"
     DOMAIN_SYMMETRIES = "domain_symmetries"
+    CYLINDRICAL_COORDINATES = "cylindrical_coordinates"
     TRANSMISSION_REFERENCE_SCENE = "transmission_reference_scene"
 
 

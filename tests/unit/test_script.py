@@ -89,6 +89,19 @@ def test_field_animation_script_emits_k_point_when_periodic_enabled() -> None:
     assert "k_point=mp.Vector3(0.1, 0.2, 0.3)" in code
 
 
+def test_field_animation_script_emits_cylindrical_kwargs_when_enabled() -> None:
+    state = ProjectState(
+        parameters=[Parameter(name="m_mode", expr="1")],
+        domain=Domain(cylindrical_enabled=True, cylindrical_m="m_mode + 1"),
+        analysis=AnalysisConfig(kind="field_animation"),
+    )
+
+    code = generate_script(state)
+
+    assert "dimensions=mp.CYLINDRICAL" in code
+    assert "m=m_mode + 1" in code
+
+
 def test_gaussian_beam_script_defines_disabled_temporal_source_without_appending() -> None:
     state = ProjectState(
         parameters=[Parameter(name="amp", expr="2")],
@@ -335,6 +348,30 @@ def test_transmission_script_emits_k_point_for_reference_and_scattering_domains(
 
     assert "k_point=mp.Vector3(0.4, 0.5, 0.6)," in code
     assert "k_point=mp.Vector3(0.1, 0.2, 0.3)," in code
+
+
+def test_transmission_script_emits_cylindrical_kwargs_for_each_domain() -> None:
+    state = ProjectState(
+        domain=Domain(cylindrical_enabled=True, cylindrical_m="1"),
+        flux_monitors=[FluxMonitorConfig(name="dev_tx")],
+        analysis=AnalysisConfig(
+            kind="transmission_spectrum",
+            transmission_spectrum=TransmissionSpectrumConfig(
+                incident_monitor="ref_inc",
+                transmission_monitor="dev_tx",
+                reference_state=TransmissionDomainState(
+                    domain=Domain(cylindrical_enabled=True, cylindrical_m="2"),
+                    flux_monitors=[FluxMonitorConfig(name="ref_inc")],
+                ),
+            ),
+        ),
+    )
+
+    code = generate_script(state)
+
+    assert code.count("dimensions=mp.CYLINDRICAL,") == 2
+    assert "m=2," in code
+    assert "m=1," in code
 
 
 def test_transmission_script_emits_per_domain_field_decay_stop_conditions() -> None:
@@ -617,9 +654,11 @@ def test_generate_script_rejects_invalid_meep_k_points_inputs() -> None:
         generate_script(too_few_points)
 
 
-def test_mpb_script_notes_domain_symmetries_are_ignored() -> None:
+def test_mpb_script_notes_fdtd_only_domain_features_are_ignored() -> None:
     state = ProjectState(
         domain=Domain(
+            cylindrical_enabled=True,
+            cylindrical_m="1",
             symmetry_enabled=True,
             symmetries=[SymmetryItem(name="mz", kind="mirror", direction="z", phase="1")],
         ),
@@ -629,6 +668,7 @@ def test_mpb_script_notes_domain_symmetries_are_ignored() -> None:
     code = generate_script(state)
 
     assert "# Note: domain symmetries are FDTD-only and are not applied to MPB." in code
+    assert "# Note: cylindrical coordinates are FDTD-only and are not applied to MPB." in code
 
 
 def test_generate_script_rejects_non_literal_symmetry_phase() -> None:

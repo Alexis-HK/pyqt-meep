@@ -109,6 +109,9 @@ def build_sim(params: SimParams, log: LogFn, *, force_complex_fields: bool = Fal
     )
     if params.k_point is not None:
         sim_kwargs["k_point"] = mp.Vector3(*params.k_point)
+    if params.cylindrical_enabled:
+        sim_kwargs["dimensions"] = mp.CYLINDRICAL
+        sim_kwargs["m"] = params.cylindrical_m
     return mp.Simulation(
         **sim_kwargs,
     )

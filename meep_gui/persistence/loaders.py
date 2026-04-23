@@ -83,6 +83,8 @@ def load_domain(raw: dict | None) -> Domain:
         k_point_x=as_str(raw.get("k_point_x", "0"), "0"),
         k_point_y=as_str(raw.get("k_point_y", "0"), "0"),
         k_point_z=as_str(raw.get("k_point_z", "0"), "0"),
+        cylindrical_enabled=normalize_bool(raw.get("cylindrical_enabled", False), False),
+        cylindrical_m=as_str(raw.get("cylindrical_m", "0"), "0"),
         symmetry_enabled=normalize_bool(raw.get("symmetry_enabled", False), False),
         symmetries=load_symmetries(raw.get("symmetries", [])),
     )

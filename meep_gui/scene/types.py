@@ -28,6 +28,8 @@ class DomainSpec:
     k_point_x_expr: str = "0"
     k_point_y_expr: str = "0"
     k_point_z_expr: str = "0"
+    cylindrical_enabled: bool = False
+    cylindrical_m_expr: str = "0"
 
 
 @dataclass(frozen=True)
@@ -142,6 +144,8 @@ class SceneSpec:
             k_point_x_expr="0",
             k_point_y_expr="0",
             k_point_z_expr="0",
+            cylindrical_enabled=False,
+            cylindrical_m_expr="0",
         )
     )
     symmetries: tuple[SymmetrySpec, ...] = ()

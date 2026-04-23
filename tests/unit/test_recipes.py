@@ -83,6 +83,8 @@ def test_recipe_specific_error_message_wins_over_generic_capability_message() ->
 def test_prepare_runtime_analysis_reports_ignored_features_for_mpb() -> None:
     state = ProjectState(
         domain=Domain(
+            cylindrical_enabled=True,
+            cylindrical_m="1",
             symmetry_enabled=True,
             symmetries=[SymmetryItem(name="mx", kind="mirror", direction="x", phase="-1")],
         ),
@@ -105,12 +107,15 @@ def test_prepare_runtime_analysis_reports_ignored_features_for_mpb() -> None:
     assert any("Gaussian (pulsed) sources are ignored by this analysis." == msg for msg in messages)
     assert any("Flux monitors are ignored by this analysis." == msg for msg in messages)
     assert any("Domain symmetries are ignored by this analysis." == msg for msg in messages)
+    assert any("Cylindrical coordinates are ignored by this analysis." == msg for msg in messages)
 
 
 def test_generate_script_logs_capability_warnings_for_mpb() -> None:
     messages: list[str] = []
     state = ProjectState(
         domain=Domain(
+            cylindrical_enabled=True,
+            cylindrical_m="1",
             symmetry_enabled=True,
             symmetries=[SymmetryItem(name="mz", kind="mirror", direction="z", phase="1")],
         ),
@@ -120,7 +125,9 @@ def test_generate_script_logs_capability_warnings_for_mpb() -> None:
     code = generate_script(state, log=messages.append)
 
     assert "# Note: domain symmetries are FDTD-only and are not applied to MPB." in code
+    assert "# Note: cylindrical coordinates are FDTD-only and are not applied to MPB." in code
     assert "Warning: Domain symmetries are ignored by this analysis." in messages
+    assert "Warning: Cylindrical coordinates are ignored by this analysis." in messages
 
 
 def test_prepare_runtime_analysis_for_meep_k_points_keeps_current_config_shape() -> None:

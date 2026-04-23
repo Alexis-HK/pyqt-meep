@@ -58,6 +58,8 @@ def test_project_state_compiles_to_typed_scene_ir() -> None:
             k_point_x="0.1",
             k_point_y="w / 4",
             k_point_z="0",
+            cylindrical_enabled=True,
+            cylindrical_m="w + 2",
             symmetry_enabled=True,
             symmetries=[SymmetryItem(name="mx", kind="mirror", direction="x", phase="-1")],
         ),
@@ -91,9 +93,13 @@ def test_project_state_compiles_to_typed_scene_ir() -> None:
     assert scene.symmetries[0].phase_expr == "-1"
     assert scene.domain.periodic_enabled is True
     assert scene.domain.k_point_x_expr == "0.1"
+    assert scene.domain.cylindrical_enabled is True
+    assert scene.domain.cylindrical_m_expr == "w + 2"
     assert compiled.context.parameter_values == {"w": 2.0, "h": 3.0}
     assert params.cell_x == 4.0
     assert params.k_point == (0.1, 0.5, 0.0)
+    assert params.cylindrical_enabled is True
+    assert params.cylindrical_m == 4.0
     assert params.shapes[0].size_x == 2.0
     assert params.shapes[0].size_y == 3.0
     assert params.symmetries[0].phase == complex(-1, 0)

@@ -79,6 +79,8 @@ class SimParams:
     pml_x: bool = True
     pml_y: bool = True
     k_point: tuple[float, float, float] | None = None
+    cylindrical_enabled: bool = False
+    cylindrical_m: float = 0.0
     symmetries: list[SymmetrySpec] = field(default_factory=list)
     shapes: list[Shape] = field(default_factory=list)
     sources: list[SourceSpec] = field(default_factory=list)

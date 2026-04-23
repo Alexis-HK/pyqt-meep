@@ -44,6 +44,7 @@ class MpbModeSolverRecipe(BaseRecipe):
             SceneFeature.GAUSSIAN_SOURCES: SupportStatus.IGNORED,
             SceneFeature.FLUX_MONITORS: SupportStatus.IGNORED,
             SceneFeature.DOMAIN_SYMMETRIES: SupportStatus.IGNORED,
+            SceneFeature.CYLINDRICAL_COORDINATES: SupportStatus.IGNORED,
         }
 
     def validate(

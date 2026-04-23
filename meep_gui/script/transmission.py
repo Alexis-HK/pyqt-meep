@@ -10,6 +10,7 @@ from .simulation import (
     emit_geometry,
     emit_sources,
     emit_symmetries,
+    simulation_cylindrical_kwargs,
     simulation_k_point_expr,
 )
 
@@ -128,6 +129,8 @@ def emit_transmission(lines: list[str], state, scattering_scene, reference_scene
         line(lines, text)
     if ref_k_point_expr is not None:
         line(lines, f"    k_point={ref_k_point_expr},")
+    for arg in simulation_cylindrical_kwargs(reference_scene.domain):
+        line(lines, f"    {arg},")
     line(lines, ")")
     emit_flux_handles(lines, "ref_flux_handles", "sim_ref", reference_scene.monitors)
     for text in (
@@ -192,6 +195,8 @@ def emit_transmission(lines: list[str], state, scattering_scene, reference_scene
         line(lines, text)
     if dev_k_point_expr is not None:
         line(lines, f"    k_point={dev_k_point_expr},")
+    for arg in simulation_cylindrical_kwargs(scattering_scene.domain):
+        line(lines, f"    {arg},")
     line(lines, ")")
     emit_flux_handles(lines, "dev_flux_handles", "sim_dev", scattering_scene.monitors)
     for text in (

@@ -7,7 +7,7 @@ from PyQt5 import QtWidgets
 from ...model import PML_MODES, SymmetryItem
 from ...store import ProjectStore
 from ...validation import validate_numeric_expression
-from ..common import _log_error, _set_invalid
+from ..common import _log_error, _set_form_row_visible, _set_invalid
 from ..dialogs import SymmetryEditDialog
 from ..scope import active_scope, parameter_names
 
@@ -37,6 +37,8 @@ class DomainTab(QtWidgets.QWidget):
         ):
             k_point_layout.addWidget(QtWidgets.QLabel(label))
             k_point_layout.addWidget(widget)
+        self.cylindrical_enabled = QtWidgets.QCheckBox("Cylindrical Coordinates")
+        self.cylindrical_m = QtWidgets.QLineEdit()
         self.symmetry_enabled = QtWidgets.QCheckBox("Enable Symmetries")
         self.add_symmetry = QtWidgets.QPushButton("Add")
         self.update_symmetry = QtWidgets.QPushButton("Update")
@@ -47,14 +49,16 @@ class DomainTab(QtWidgets.QWidget):
         self.symmetry_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.symmetry_table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
 
-        form = QtWidgets.QFormLayout()
-        form.addRow("Cell X", self.cell_x)
-        form.addRow("Cell Y", self.cell_y)
-        form.addRow("Resolution", self.resolution)
-        form.addRow("PML Width", self.pml_width)
-        form.addRow("PML Mode", self.pml_mode)
-        form.addRow(self.periodic_enabled)
-        form.addRow("k_point", self.k_point_widget)
+        self.domain_form = QtWidgets.QFormLayout()
+        self.domain_form.addRow("Cell X", self.cell_x)
+        self.domain_form.addRow("Cell Y", self.cell_y)
+        self.domain_form.addRow("Resolution", self.resolution)
+        self.domain_form.addRow("PML Width", self.pml_width)
+        self.domain_form.addRow("PML Mode", self.pml_mode)
+        self.domain_form.addRow(self.periodic_enabled)
+        self.domain_form.addRow("k_point", self.k_point_widget)
+        self.domain_form.addRow(self.cylindrical_enabled)
+        self.domain_form.addRow("m", self.cylindrical_m)
 
         symmetry_buttons = QtWidgets.QHBoxLayout()
         symmetry_buttons.addWidget(self.add_symmetry)
@@ -62,7 +66,7 @@ class DomainTab(QtWidgets.QWidget):
         symmetry_buttons.addWidget(self.remove_symmetry)
 
         layout = QtWidgets.QVBoxLayout(self)
-        layout.addLayout(form)
+        layout.addLayout(self.domain_form)
         layout.addWidget(self.symmetry_enabled)
         layout.addLayout(symmetry_buttons)
         layout.addWidget(self.symmetry_table)
@@ -76,10 +80,12 @@ class DomainTab(QtWidgets.QWidget):
             self.k_point_x,
             self.k_point_y,
             self.k_point_z,
+            self.cylindrical_m,
         ):
             widget.editingFinished.connect(self._on_apply)
         self.pml_mode.currentTextChanged.connect(lambda _: self._on_apply())
         self.periodic_enabled.toggled.connect(self._on_periodic_toggle)
+        self.cylindrical_enabled.toggled.connect(self._on_cylindrical_toggle)
         self.symmetry_enabled.toggled.connect(self._on_symmetry_toggle)
         self.add_symmetry.clicked.connect(self._on_add_symmetry)
         self.update_symmetry.clicked.connect(self._on_update_symmetry)
@@ -113,6 +119,8 @@ class DomainTab(QtWidgets.QWidget):
                     (self.k_point_z, "Kz"),
                 ]
             )
+        if self.cylindrical_enabled.isChecked():
+            fields.append((self.cylindrical_m, "m"))
         ok = True
         for widget, label in fields:
             result = validate_numeric_expression(widget.text().strip(), allowed)
@@ -135,6 +143,8 @@ class DomainTab(QtWidgets.QWidget):
             k_point_x=self.k_point_x.text().strip(),
             k_point_y=self.k_point_y.text().strip(),
             k_point_z=self.k_point_z.text().strip(),
+            cylindrical_enabled=self.cylindrical_enabled.isChecked(),
+            cylindrical_m=self.cylindrical_m.text().strip(),
         )
         self.store.notify()
 
@@ -143,6 +153,16 @@ class DomainTab(QtWidgets.QWidget):
 
     def _on_periodic_toggle(self, _checked: bool) -> None:
         self._sync_periodic_controls()
+        self._on_apply()
+
+    def _sync_cylindrical_controls(self) -> None:
+        enabled = self.cylindrical_enabled.isChecked()
+        _set_form_row_visible(self.domain_form, self.cylindrical_m, enabled)
+        if not enabled:
+            _set_invalid(self.cylindrical_m, False)
+
+    def _on_cylindrical_toggle(self, _checked: bool) -> None:
+        self._sync_cylindrical_controls()
         self._on_apply()
 
     def _sync_symmetry_controls(self) -> None:
@@ -214,6 +234,7 @@ class DomainTab(QtWidgets.QWidget):
         self.k_point_x.setText(domain.k_point_x)
         self.k_point_y.setText(domain.k_point_y)
         self.k_point_z.setText(domain.k_point_z)
+        self.cylindrical_m.setText(domain.cylindrical_m)
         idx = self.pml_mode.findText(domain.pml_mode)
         if idx >= 0:
             self.pml_mode.setCurrentIndex(idx)
@@ -221,6 +242,10 @@ class DomainTab(QtWidgets.QWidget):
         self.periodic_enabled.setChecked(domain.periodic_enabled)
         self.periodic_enabled.blockSignals(False)
         self._sync_periodic_controls()
+        self.cylindrical_enabled.blockSignals(True)
+        self.cylindrical_enabled.setChecked(domain.cylindrical_enabled)
+        self.cylindrical_enabled.blockSignals(False)
+        self._sync_cylindrical_controls()
         self.symmetry_enabled.blockSignals(True)
         self.symmetry_enabled.setChecked(domain.symmetry_enabled)
         self.symmetry_enabled.blockSignals(False)

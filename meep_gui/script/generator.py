@@ -16,6 +16,7 @@ from .simulation import (
     emit_materials,
     emit_sources,
     emit_symmetries,
+    simulation_cylindrical_kwargs,
     simulation_k_point_expr,
 )
 
@@ -108,13 +109,14 @@ def _emit_fdtd_setup(
         k_point_expr = simulation_k_point_expr(scene.domain)
         if k_point_expr is not None:
             k_point_arg = f", k_point={k_point_expr}"
+    cylindrical_arg = "".join(f", {item}" for item in simulation_cylindrical_kwargs(scene.domain))
     line(
         lines,
         "sim = mp.Simulation("
         f"cell_size=mp.Vector3({scene.domain.cell_x_expr}, {scene.domain.cell_y_expr}, 0), "
         "boundary_layers=boundary_layers, geometry=geometry, sources=sources, "
         "symmetries=symmetries, "
-        f"resolution={scene.domain.resolution_expr}{force_complex_arg}{k_point_arg})",
+        f"resolution={scene.domain.resolution_expr}{force_complex_arg}{k_point_arg}{cylindrical_arg})",
     )
     line(lines)
 

@@ -58,6 +58,12 @@ def simulation_k_point_expr(domain) -> str | None:
     )
 
 
+def simulation_cylindrical_kwargs(domain) -> tuple[str, ...]:
+    if not getattr(domain, "cylindrical_enabled", False):
+        return ()
+    return ("dimensions=mp.CYLINDRICAL", f"m={domain.cylindrical_m_expr}")
+
+
 def emit_symmetries(lines: list[str], var_name: str, symmetries) -> None:
     line(lines, f"{var_name} = []")
     for symmetry in symmetries:

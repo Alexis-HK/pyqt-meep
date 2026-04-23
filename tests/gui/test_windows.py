@@ -567,6 +567,63 @@ def test_domain_tab_periodic_toggle_updates_visibility_and_scope(qtbot) -> None:
     assert store.state.domain.k_point_z == "0.3"
 
 
+def test_domain_tab_cylindrical_toggle_updates_visibility_and_scope(qtbot) -> None:
+    store = ProjectStore()
+    tab = DomainTab(store)
+    qtbot.addWidget(tab)
+
+    _assert_form_row_hidden(tab.domain_form, tab.cylindrical_m)
+    tab.cylindrical_enabled.setChecked(True)
+    _assert_form_row_visible(tab.domain_form, tab.cylindrical_m)
+
+    tab.cylindrical_m.setText("1 + 1")
+    tab._on_apply()
+
+    assert store.state.domain.cylindrical_enabled is True
+    assert store.state.domain.cylindrical_m == "1 + 1"
+
+
+def test_domain_tab_routes_cylindrical_updates_to_reference_domain(qtbot) -> None:
+    store = ProjectStore()
+    tx_cfg = TransmissionSpectrumConfig(preview_domain="reference")
+    store.state.analysis = AnalysisConfig(kind="transmission_spectrum", transmission_spectrum=tx_cfg)
+
+    tab = DomainTab(store)
+    qtbot.addWidget(tab)
+    tab.cylindrical_enabled.setChecked(True)
+    tab.cylindrical_m.setText("2")
+    tab._on_apply()
+
+    ref_domain = store.state.analysis.transmission_spectrum.reference_state.domain
+    assert ref_domain.cylindrical_enabled is True
+    assert ref_domain.cylindrical_m == "2"
+    assert store.state.domain.cylindrical_enabled is False
+
+
+def test_domain_tab_validates_cylindrical_m_only_when_enabled(qtbot, monkeypatch) -> None:
+    store = ProjectStore()
+    warning_calls: list[tuple[str, str]] = []
+
+    def _warn(_parent, title: str, msg: str) -> None:
+        warning_calls.append((title, msg))
+
+    monkeypatch.setattr(QtWidgets.QMessageBox, "warning", _warn)
+
+    tab = DomainTab(store)
+    qtbot.addWidget(tab)
+    tab.cylindrical_m.setText("bad +")
+    tab._on_apply()
+
+    assert warning_calls == []
+    assert store.state.domain.cylindrical_enabled is False
+
+    tab.cylindrical_enabled.setChecked(True)
+
+    assert warning_calls
+    assert "m:" in warning_calls[-1][1]
+    assert store.state.domain.cylindrical_enabled is False
+
+
 def test_domain_tab_routes_periodic_updates_to_reference_domain(qtbot) -> None:
     store = ProjectStore()
     tx_cfg = TransmissionSpectrumConfig(preview_domain="reference")

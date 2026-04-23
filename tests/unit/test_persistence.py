@@ -26,6 +26,8 @@ def test_project_dict_roundtrip_fixture() -> None:
     assert state.domain.k_point_x == "0.1"
     assert state.domain.k_point_y == "0.2"
     assert state.domain.k_point_z == "0.3"
+    assert state.domain.cylindrical_enabled is False
+    assert state.domain.cylindrical_m == "0"
     assert state.results == []
 
 
@@ -67,6 +69,8 @@ def test_absent_new_sections_fixture_keeps_defaults() -> None:
     assert state.domain.k_point_x == "0"
     assert state.domain.k_point_y == "0"
     assert state.domain.k_point_z == "0"
+    assert state.domain.cylindrical_enabled is False
+    assert state.domain.cylindrical_m == "0"
     assert state.analysis.frequency_domain_solver.component == "Ez"
     assert state.analysis.frequency_domain_solver.tolerance == "1e-8"
     assert state.analysis.frequency_domain_solver.max_iters == "10000"
@@ -79,6 +83,39 @@ def test_absent_new_sections_fixture_keeps_defaults() -> None:
     assert state.analysis.mpb_modesolver.run_tm is True
     assert state.analysis.mpb_modesolver.run_te is False
     assert state.analysis.mpb_modesolver.field_kpoints == []
+
+
+def test_domain_cylindrical_fields_roundtrip() -> None:
+    raw = state_to_dict(state_from_dict(_load_fixture("minimal_analysis.json")))
+    raw["domain"] = {
+        "cell_x": "10",
+        "cell_y": "10",
+        "resolution": "20",
+        "pml_width": "1",
+        "pml_mode": "both",
+        "cylindrical_enabled": True,
+        "cylindrical_m": "m_param + 1",
+    }
+    raw["analysis"]["transmission_spectrum"]["reference_state"] = {
+        "domain": {
+            "cylindrical_enabled": True,
+            "cylindrical_m": "2",
+        }
+    }
+
+    state = state_from_dict(raw)
+    dumped = state_to_dict(state)
+
+    assert state.domain.cylindrical_enabled is True
+    assert state.domain.cylindrical_m == "m_param + 1"
+    ref_domain = state.analysis.transmission_spectrum.reference_state.domain
+    assert ref_domain.cylindrical_enabled is True
+    assert ref_domain.cylindrical_m == "2"
+    assert dumped["domain"]["cylindrical_enabled"] is True
+    assert dumped["domain"]["cylindrical_m"] == "m_param + 1"
+    assert dumped["analysis"]["transmission_spectrum"]["reference_state"]["domain"][
+        "cylindrical_m"
+    ] == "2"
 
 
 def test_source_enabled_defaults_true_and_roundtrips() -> None:

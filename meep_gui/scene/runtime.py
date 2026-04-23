@@ -68,6 +68,12 @@ def scene_to_sim_params(scene: SceneSpec, context: CompilationContext) -> SimPar
         pml_x=scene.domain.pml_mode in {"x", "both"},
         pml_y=scene.domain.pml_mode in {"y", "both"},
         k_point=k_point,
+        cylindrical_enabled=scene.domain.cylindrical_enabled,
+        cylindrical_m=(
+            eval_required(scene.domain.cylindrical_m_expr, context, "cylindrical_m")
+            if scene.domain.cylindrical_enabled
+            else 0.0
+        ),
         symmetries=symmetries,
         shapes=shapes,
         sources=sources,

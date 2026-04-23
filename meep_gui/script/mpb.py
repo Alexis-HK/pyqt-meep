@@ -8,6 +8,8 @@ def emit_mpb(lines: list[str], state) -> None:
     line(lines, "# MPB")
     if state.domain.symmetry_enabled and state.domain.symmetries:
         line(lines, "# Note: domain symmetries are FDTD-only and are not applied to MPB.")
+    if state.domain.cylindrical_enabled:
+        line(lines, "# Note: cylindrical coordinates are FDTD-only and are not applied to MPB.")
     for text in (
         "geometry_lattice = mp.Lattice("
         f"size=mp.Vector3({cfg.lattice_x}, {cfg.lattice_y}, 0), "

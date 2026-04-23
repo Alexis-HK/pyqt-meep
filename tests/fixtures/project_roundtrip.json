@@ -18,6 +18,8 @@
     "k_point_x": "0.1",
     "k_point_y": "0.2",
     "k_point_z": "0.3",
+    "cylindrical_enabled": false,
+    "cylindrical_m": "0",
     "symmetry_enabled": false,
     "symmetries": []
   },
@@ -91,6 +93,8 @@
           "k_point_x": "0",
           "k_point_y": "0",
           "k_point_z": "0",
+          "cylindrical_enabled": false,
+          "cylindrical_m": "0",
           "symmetry_enabled": true,
           "symmetries": [
             {

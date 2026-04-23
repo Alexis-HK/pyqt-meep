@@ -17,6 +17,8 @@ class Domain:
     k_point_x: str = "0"
     k_point_y: str = "0"
     k_point_z: str = "0"
+    cylindrical_enabled: bool = False
+    cylindrical_m: str = "0"
     symmetry_enabled: bool = False
     symmetries: list[SymmetryItem] = field(default_factory=list)
 
@@ -64,6 +66,8 @@ def normalize_domain(domain: Domain) -> Domain:
         k_point_x=domain.k_point_x,
         k_point_y=domain.k_point_y,
         k_point_z=domain.k_point_z,
+        cylindrical_enabled=normalize_bool(domain.cylindrical_enabled, False),
+        cylindrical_m=domain.cylindrical_m,
         symmetry_enabled=normalize_bool(domain.symmetry_enabled, False),
         symmetries=normalized_symmetries,
     )
