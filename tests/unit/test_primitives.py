@@ -250,9 +250,11 @@ def test_chirped_pulse_source_compiles_runtime_callback() -> None:
     assert compiled.scene.sources[0].source_time is not None
     assert compiled.scene.sources[0].source_time.chirp_v0_expr == "0.4"
     assert compiled.scene.sources[0].source_time.chirp_t0_expr == "10 + shift"
+    assert compiled.scene.sources[0].source_time.center_frequency_expr == "0.4"
     assert params.sources[0].kind == "chirped_pulse"
     assert params.sources[0].source_time_kind == "chirped_pulse"
     assert params.sources[0].source_time is not None
+    assert params.sources[0].source_time.center_frequency == 0.4
     assert params.sources[0].source_time.chirp_v0 == 0.4
     assert params.sources[0].source_time.chirp_a == 0.2
     assert params.sources[0].source_time.chirp_b == -0.5
@@ -327,6 +329,7 @@ def test_gaussian_beam_resolves_chirped_pulse_source_time() -> None:
     assert params.sources[0].kind == "gaussian_beam"
     assert params.sources[0].source_time_kind == "chirped_pulse"
     assert params.sources[0].source_time is not None
+    assert params.sources[0].source_time.center_frequency == 0.25
     assert params.sources[0].source_time.chirp_t0 == 4.0
     assert params.sources[0].source_time.src_func is not None
     assert abs(params.sources[0].source_time.src_func(4.0) - (1 + 0j)) < 1e-9

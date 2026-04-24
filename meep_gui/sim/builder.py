@@ -72,7 +72,10 @@ def build_sim(params: SimParams, log: LogFn, *, force_complex_fields: bool = Fal
             if source_time.kind == "chirped_pulse":
                 if source_time.src_func is None:
                     raise ValueError("Chirped pulse source is missing src_func.")
-                return mp.CustomSource(src_func=source_time.src_func)
+                return mp.CustomSource(
+                    src_func=source_time.src_func,
+                    center_frequency=source_time.center_frequency,
+                )
             raise ValueError("Source references an unsupported SourceTime.")
 
         if spec.kind == "gaussian_beam":

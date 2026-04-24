@@ -252,7 +252,7 @@ def test_chirped_pulse_script_emits_helper_and_custom_source_wrapper() -> None:
     assert "delta = t - (15)" in code
     assert "cmath.exp(1j * 6.283185307179586 * (1.0) * delta)" in code
     assert "cmath.exp((-(0.2) + 1j * (-0.5)) * delta * delta)" in code
-    assert "sources_1 = mp.Source(mp.CustomSource(src_func=sources_1_time_src_func)" in code
+    assert "sources_1 = mp.Source(mp.CustomSource(src_func=sources_1_time_src_func, center_frequency=1.0)" in code
 
 
 def test_gaussian_beam_script_can_inline_chirped_pulse_source_time() -> None:
@@ -280,7 +280,7 @@ def test_gaussian_beam_script_can_inline_chirped_pulse_source_time() -> None:
     assert "import cmath" in code
     assert "def sources_2_time_src_func(t):" in code
     assert "delta = t - (7)" in code
-    assert "src=mp.CustomSource(src_func=sources_2_time_src_func)," in code
+    assert "src=mp.CustomSource(src_func=sources_2_time_src_func, center_frequency=0.8)," in code
 
 
 def test_harminv_script_emits_flux_png_exports_when_monitors_exist() -> None:

@@ -63,12 +63,14 @@ def _chirped_pulse_source_time(item):
     from ..scene.types import SourceTimeSpec
 
     props = getattr(item, "props", {}) or {}
+    v0_expr = _prop_text(props, "v0", "1.0")
     return SourceTimeSpec(
         kind="chirped_pulse",
-        chirp_v0_expr=_prop_text(props, "v0", "1.0"),
+        chirp_v0_expr=v0_expr,
         chirp_a_expr=_prop_text(props, "a", "0.2"),
         chirp_b_expr=_prop_text(props, "b", "-0.5"),
         chirp_t0_expr=_prop_text(props, "t0", "15"),
+        center_frequency_expr=v0_expr,
     )
 
 
@@ -201,6 +203,7 @@ def _source_time_to_runtime(source_time, context, eval_required, label: str):
             frequency=v0,
             bandwidth=0.0,
             src_func=src_func,
+            center_frequency=v0,
             chirp_v0=v0,
             chirp_a=a,
             chirp_b=b,
@@ -373,7 +376,12 @@ def _source_time_script_parts(source_time, *, helper_prefix: str) -> tuple[tuple
             f"        * cmath.exp((-({source_time.chirp_a_expr}) + 1j * ({source_time.chirp_b_expr})) * delta * delta)",
             "    )",
         )
-        return lines, f"mp.CustomSource(src_func={helper_name})"
+        return (
+            lines,
+            "mp.CustomSource("
+            f"src_func={helper_name}, "
+            f"center_frequency={source_time.center_frequency_expr})",
+        )
 
     helper_name = f"{helper_prefix}_src_func"
     lines = (
