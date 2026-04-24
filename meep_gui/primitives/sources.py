@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import cmath
 from dataclasses import replace
 
 from .base import PrimitiveField, SourceKindSpec
 
 SOURCE_REGISTRY: dict[str, SourceKindSpec]
+_TWO_PI = 6.283185307179586
 
 
 def _prop_text(props: dict[str, str | bool], field_id: str, default: str) -> str:
@@ -54,6 +56,19 @@ def _custom_source_time(item):
         is_integrated=_prop_bool(props, "is_integrated", False),
         center_frequency_expr=_prop_text(props, "center_frequency", "0"),
         fwidth_expr=_prop_text(props, "fwidth", "0"),
+    )
+
+
+def _chirped_pulse_source_time(item):
+    from ..scene.types import SourceTimeSpec
+
+    props = getattr(item, "props", {}) or {}
+    return SourceTimeSpec(
+        kind="chirped_pulse",
+        chirp_v0_expr=_prop_text(props, "v0", "1.0"),
+        chirp_a_expr=_prop_text(props, "a", "0.2"),
+        chirp_b_expr=_prop_text(props, "b", "-0.5"),
+        chirp_t0_expr=_prop_text(props, "t0", "15"),
     )
 
 
@@ -110,6 +125,23 @@ def _compile_custom_source(item):
     )
 
 
+def _compile_chirped_pulse_source(item):
+    from ..scene.types import SourceSpec
+
+    props = getattr(item, "props", {}) or {}
+    return SourceSpec(
+        name=getattr(item, "name", ""),
+        kind="chirped_pulse",
+        component=getattr(item, "component", "Ez"),
+        center_x_expr=_prop_text(props, "center_x", "0"),
+        center_y_expr=_prop_text(props, "center_y", "0"),
+        size_x_expr=_prop_text(props, "size_x", "0"),
+        size_y_expr=_prop_text(props, "size_y", "0"),
+        enabled=getattr(item, "enabled", True),
+        source_time=_chirped_pulse_source_time(item),
+    )
+
+
 def _compile_gaussian_beam_source(item):
     from ..scene.types import SourceSpec
 
@@ -151,6 +183,28 @@ def _source_time_to_runtime(source_time, context, eval_required, label: str):
             kind="gaussian",
             frequency=eval_required(source_time.frequency_expr, context, f"{label}.fcen"),
             bandwidth=eval_required(source_time.bandwidth_expr, context, f"{label}.df"),
+        )
+    if source_time.kind == "chirped_pulse":
+        v0 = eval_required(source_time.chirp_v0_expr, context, f"{label}.v0")
+        a = eval_required(source_time.chirp_a_expr, context, f"{label}.a")
+        b = eval_required(source_time.chirp_b_expr, context, f"{label}.b")
+        t0 = eval_required(source_time.chirp_t0_expr, context, f"{label}.t0")
+
+        def src_func(t: float) -> complex:
+            delta = t - t0
+            return cmath.exp(1j * _TWO_PI * v0 * delta) * cmath.exp(
+                (-a + 1j * b) * delta * delta
+            )
+
+        return SourceTimeSpec(
+            kind="chirped_pulse",
+            frequency=v0,
+            bandwidth=0.0,
+            src_func=src_func,
+            chirp_v0=v0,
+            chirp_a=a,
+            chirp_b=b,
+            chirp_t0=t0,
         )
 
     evaluator = compile_complex_expression(
@@ -208,6 +262,22 @@ def _gaussian_to_runtime_source(src, context, eval_required):
         raise ValueError(f"Source '{src.name}': missing source time.")
     return SourceSpec(
         kind="gaussian",
+        center_x=eval_required(src.center_x_expr, context, "center_x"),
+        center_y=eval_required(src.center_y_expr, context, "center_y"),
+        width_x=eval_required(src.size_x_expr, context, "size_x"),
+        width_y=eval_required(src.size_y_expr, context, "size_y"),
+        component=src.component,
+        source_time=_source_time_to_runtime(src.source_time, context, eval_required, src.name or "src"),
+    )
+
+
+def _chirped_pulse_to_runtime_source(src, context, eval_required):
+    from ..specs.simulation import SourceSpec
+
+    if src.source_time is None:
+        raise ValueError(f"Source '{src.name}': missing source time.")
+    return SourceSpec(
+        kind="chirped_pulse",
         center_x=eval_required(src.center_x_expr, context, "center_x"),
         center_y=eval_required(src.center_y_expr, context, "center_y"),
         width_x=eval_required(src.size_x_expr, context, "size_x"),
@@ -293,6 +363,17 @@ def _source_time_script_parts(source_time, *, helper_prefix: str) -> tuple[tuple
             (),
             f"mp.GaussianSource(frequency={source_time.frequency_expr}, fwidth={source_time.bandwidth_expr})",
         )
+    if source_time.kind == "chirped_pulse":
+        helper_name = f"{helper_prefix}_src_func"
+        lines = (
+            f"def {helper_name}(t):",
+            f"    delta = t - ({source_time.chirp_t0_expr})",
+            "    return (",
+            f"        cmath.exp(1j * {_TWO_PI} * ({source_time.chirp_v0_expr}) * delta)",
+            f"        * cmath.exp((-({source_time.chirp_a_expr}) + 1j * ({source_time.chirp_b_expr})) * delta * delta)",
+            "    )",
+        )
+        return lines, f"mp.CustomSource(src_func={helper_name})"
 
     helper_name = f"{helper_prefix}_src_func"
     lines = (
@@ -377,6 +458,27 @@ def _emit_custom_script(var_name: str, idx: int, src) -> tuple[str, ...]:
     return tuple(lines)
 
 
+def _emit_chirped_pulse_script(var_name: str, idx: int, src) -> tuple[str, ...]:
+    if src.source_time is None:
+        raise ValueError(f"Source '{src.name}': missing source time.")
+
+    name = f"{var_name}_{idx}"
+    lines: list[str] = []
+    helper_lines, src_expr = _source_time_script_parts(src.source_time, helper_prefix=f"{name}_time")
+    lines.extend(helper_lines)
+    if helper_lines:
+        lines.append("")
+    lines.extend(
+        (
+            f"{name} = mp.Source({src_expr}, "
+            f"component=mp.{src.component}, center=mp.Vector3({src.center_x_expr}, {src.center_y_expr}), "
+            f"size=mp.Vector3({src.size_x_expr}, {src.size_y_expr}, 0))",
+        )
+    )
+    lines.extend(_maybe_append(var_name, name, src.enabled))
+    return tuple(lines)
+
+
 def _emit_gaussian_beam_script(var_name: str, idx: int, src) -> tuple[str, ...]:
     if src.source_time is None:
         raise ValueError(f"Gaussian beam source '{src.name}' is missing a SourceTime.")
@@ -419,9 +521,9 @@ def resolve_source_time_references(sources):
             raise ValueError(
                 f"Gaussian beam source '{item.name}' references unknown SourceTime '{ref_name}'."
             )
-        if ref.kind not in {"continuous", "gaussian", "custom"} or ref.source_time is None:
+        if ref.kind not in {"continuous", "gaussian", "custom", "chirped_pulse"} or ref.source_time is None:
             raise ValueError(
-                f"Gaussian beam source '{item.name}' can only reference continuous, Gaussian, or custom sources."
+                f"Gaussian beam source '{item.name}' can only reference continuous, Gaussian, custom, or chirped pulse sources."
             )
         resolved.append(replace(item, source_time=ref.source_time))
     return tuple(resolved)
@@ -503,6 +605,23 @@ SOURCE_REGISTRY = {
         compile_scene_source=_compile_custom_source,
         to_runtime_source=_custom_to_runtime_source,
         emit_script_source=_emit_custom_script,
+    ),
+    "chirped_pulse": SourceKindSpec(
+        kind_id="chirped_pulse",
+        display_name="Chirped Pulse",
+        fields=(
+            PrimitiveField("center_x", "Center X", "0", section="spatial"),
+            PrimitiveField("center_y", "Center Y", "0", section="spatial"),
+            PrimitiveField("size_x", "Size X", "0", section="spatial"),
+            PrimitiveField("size_y", "Size Y", "0", section="spatial"),
+            PrimitiveField("v0", "v0", "1.0", section="temporal"),
+            PrimitiveField("a", "a", "0.2", section="temporal"),
+            PrimitiveField("b", "b", "-0.5", section="temporal"),
+            PrimitiveField("t0", "t0", "15", section="temporal"),
+        ),
+        compile_scene_source=_compile_chirped_pulse_source,
+        to_runtime_source=_chirped_pulse_to_runtime_source,
+        emit_script_source=_emit_chirped_pulse_script,
     ),
     "gaussian_beam": SourceKindSpec(
         kind_id="gaussian_beam",

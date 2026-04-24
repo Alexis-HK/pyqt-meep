@@ -223,6 +223,66 @@ def test_gaussian_beam_script_can_inline_custom_temporal_source() -> None:
     assert "fwidth=0.07" in code
 
 
+def test_chirped_pulse_script_emits_helper_and_custom_source_wrapper() -> None:
+    state = ProjectState(
+        sources=[
+            SourceItem(
+                name="chirp",
+                kind="chirped_pulse",
+                component="Ez",
+                props={
+                    "center_x": "-0.5",
+                    "center_y": "0",
+                    "size_x": "0",
+                    "size_y": "8",
+                    "v0": "1.0",
+                    "a": "0.2",
+                    "b": "-0.5",
+                    "t0": "15",
+                },
+            )
+        ],
+        analysis=AnalysisConfig(kind="field_animation"),
+    )
+
+    code = generate_script(state)
+
+    assert "import cmath" in code
+    assert "def sources_1_time_src_func(t):" in code
+    assert "delta = t - (15)" in code
+    assert "cmath.exp(1j * 6.283185307179586 * (1.0) * delta)" in code
+    assert "cmath.exp((-(0.2) + 1j * (-0.5)) * delta * delta)" in code
+    assert "sources_1 = mp.Source(mp.CustomSource(src_func=sources_1_time_src_func)" in code
+
+
+def test_gaussian_beam_script_can_inline_chirped_pulse_source_time() -> None:
+    state = ProjectState(
+        sources=[
+            SourceItem(
+                name="chirp_time",
+                kind="chirped_pulse",
+                component="Ez",
+                props={"v0": "0.8", "a": "0.1", "b": "0.05", "t0": "7"},
+                enabled=False,
+            ),
+            SourceItem(
+                name="beam",
+                kind="gaussian_beam",
+                component="Ez",
+                props={"src": "chirp_time"},
+            ),
+        ],
+        analysis=AnalysisConfig(kind="field_animation"),
+    )
+
+    code = generate_script(state)
+
+    assert "import cmath" in code
+    assert "def sources_2_time_src_func(t):" in code
+    assert "delta = t - (7)" in code
+    assert "src=mp.CustomSource(src_func=sources_2_time_src_func)," in code
+
+
 def test_harminv_script_emits_flux_png_exports_when_monitors_exist() -> None:
     state = ProjectState(
         flux_monitors=[FluxMonitorConfig(name="tx")],

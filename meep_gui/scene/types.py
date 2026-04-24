@@ -7,8 +7,8 @@ MediumKind = Literal["constant", "lossy_narrowband", "dispersive", "nonlinear", 
 GeometryKind = Literal["block", "circle", "polygon", "imported_polygon"]
 SpatialMaterialKind = Literal["uniform", "function", "grid"]
 EvolutionKind = Literal["static", "translate", "rotate", "keyframed", "scripted"]
-SourceKind = Literal["continuous", "gaussian", "custom", "gaussian_beam"]
-SourceTimeKind = Literal["continuous", "gaussian", "custom"]
+SourceKind = Literal["continuous", "gaussian", "custom", "chirped_pulse", "gaussian_beam"]
+SourceTimeKind = Literal["continuous", "gaussian", "custom", "chirped_pulse"]
 MonitorKind = Literal["flux"]
 
 
@@ -146,6 +146,10 @@ class SourceTimeSpec:
     is_integrated: bool = False
     center_frequency_expr: str = "0"
     fwidth_expr: str = "0"
+    chirp_v0_expr: str = "1.0"
+    chirp_a_expr: str = "0.2"
+    chirp_b_expr: str = "-0.5"
+    chirp_t0_expr: str = "15"
 
 
 @dataclass(frozen=True)

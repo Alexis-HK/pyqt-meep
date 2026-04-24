@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import cmath
+
 from meep_gui.model import (
     GEOMETRY_FIELDS,
     GEOMETRY_KINDS,
@@ -25,7 +27,13 @@ from meep_gui.scene import compile_project_scene, scene_to_flux_specs, scene_to_
 
 def test_primitive_registries_cover_current_builtin_kinds() -> None:
     assert tuple(GEOMETRY_REGISTRY) == ("circle", "block")
-    assert tuple(SOURCE_REGISTRY) == ("continuous", "gaussian", "custom", "gaussian_beam")
+    assert tuple(SOURCE_REGISTRY) == (
+        "continuous",
+        "gaussian",
+        "custom",
+        "chirped_pulse",
+        "gaussian_beam",
+    )
     assert tuple(MATERIAL_REGISTRY) == ("constant",)
     assert tuple(MONITOR_REGISTRY) == ("flux",)
     assert DEFAULT_MATERIAL_KIND == "constant"
@@ -212,6 +220,50 @@ def test_custom_source_allows_blank_amp_func() -> None:
     assert params.sources[0].amp_func is None
 
 
+def test_chirped_pulse_source_compiles_runtime_callback() -> None:
+    state = ProjectState(
+        parameters=[Parameter(name="shift", expr="2")],
+        sources=[
+            SourceItem(
+                name="chirp",
+                kind="chirped_pulse",
+                component="Ez",
+                props={
+                    "center_x": "1",
+                    "center_y": "-1",
+                    "size_x": "0",
+                    "size_y": "3",
+                    "v0": "0.4",
+                    "a": "0.2",
+                    "b": "-0.5",
+                    "t0": "10 + shift",
+                },
+            )
+        ],
+    )
+
+    compiled = compile_project_scene(state)
+    params = scene_to_sim_params(compiled.scene, compiled.context)
+
+    assert compiled.scene.sources[0].kind == "chirped_pulse"
+    assert compiled.scene.sources[0].source_time_kind == "chirped_pulse"
+    assert compiled.scene.sources[0].source_time is not None
+    assert compiled.scene.sources[0].source_time.chirp_v0_expr == "0.4"
+    assert compiled.scene.sources[0].source_time.chirp_t0_expr == "10 + shift"
+    assert params.sources[0].kind == "chirped_pulse"
+    assert params.sources[0].source_time_kind == "chirped_pulse"
+    assert params.sources[0].source_time is not None
+    assert params.sources[0].source_time.chirp_v0 == 0.4
+    assert params.sources[0].source_time.chirp_a == 0.2
+    assert params.sources[0].source_time.chirp_b == -0.5
+    assert params.sources[0].source_time.chirp_t0 == 12.0
+    assert params.sources[0].source_time.src_func is not None
+    expected = cmath.exp(1j * 6.283185307179586 * 0.4 * 1.0) * cmath.exp(
+        (-0.2 - 0.5j) * 1.0
+    )
+    assert abs(params.sources[0].source_time.src_func(13.0) - expected) < 1e-9
+
+
 def test_gaussian_beam_resolves_custom_temporal_source() -> None:
     state = ProjectState(
         parameters=[Parameter(name="phase", expr="2")],
@@ -246,3 +298,35 @@ def test_gaussian_beam_resolves_custom_temporal_source() -> None:
     assert params.sources[0].source_time is not None
     assert abs(params.sources[0].source_time.src_func(1).real - 1) < 1e-9
     assert abs(params.sources[0].source_time.src_func(1).imag - 2) < 1e-9
+
+
+def test_gaussian_beam_resolves_chirped_pulse_source_time() -> None:
+    state = ProjectState(
+        sources=[
+            SourceItem(
+                name="chirp_time",
+                kind="chirped_pulse",
+                component="Ez",
+                props={"v0": "0.25", "a": "0.1", "b": "0.3", "t0": "4"},
+                enabled=False,
+            ),
+            SourceItem(
+                name="beam",
+                kind="gaussian_beam",
+                component="Ez",
+                props={"src": "chirp_time"},
+            ),
+        ],
+    )
+
+    compiled = compile_project_scene(state)
+    params = scene_to_sim_params(compiled.scene, compiled.context)
+
+    assert compiled.scene.sources[1].source_time_kind == "chirped_pulse"
+    assert len(params.sources) == 1
+    assert params.sources[0].kind == "gaussian_beam"
+    assert params.sources[0].source_time_kind == "chirped_pulse"
+    assert params.sources[0].source_time is not None
+    assert params.sources[0].source_time.chirp_t0 == 4.0
+    assert params.sources[0].source_time.src_func is not None
+    assert abs(params.sources[0].source_time.src_func(4.0) - (1 + 0j)) < 1e-9

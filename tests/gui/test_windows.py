@@ -1648,6 +1648,35 @@ def test_sources_tab_shows_custom_sections_and_preserves_custom_values(qtbot) ->
     assert tab.is_integrated.isChecked() is True
 
 
+def test_sources_tab_shows_chirped_pulse_sections_and_preserves_values(qtbot) -> None:
+    store = ProjectStore()
+    tab = SourcesTab(store)
+    qtbot.addWidget(tab)
+    tab.show()
+
+    tab.kind_input.setCurrentText("chirped_pulse")
+
+    assert not tab.spatial_header.isHidden()
+    assert not tab.temporal_header.isHidden()
+    _assert_form_row_visible(tab.form, tab.component_input)
+    _assert_form_row_visible(tab.form, tab.center_x)
+    _assert_form_row_visible(tab.form, tab.size_y)
+    _assert_form_row_visible(tab.form, tab.v0)
+    _assert_form_row_visible(tab.form, tab.a)
+    _assert_form_row_visible(tab.form, tab.b)
+    _assert_form_row_visible(tab.form, tab.t0)
+    _assert_form_row_hidden(tab.form, tab.src_func)
+    _assert_form_row_hidden(tab.form, tab.is_integrated)
+
+    tab.v0.setText("0.75")
+    tab.t0.setText("12")
+    tab.kind_input.setCurrentText("gaussian")
+    tab.kind_input.setCurrentText("chirped_pulse")
+
+    assert tab.v0.text() == "0.75"
+    assert tab.t0.text() == "12"
+
+
 def test_sources_tab_adds_gaussian_beam_with_disabled_source_time(qtbot) -> None:
     store = ProjectStore()
     store.state.sources.append(
@@ -1701,6 +1730,26 @@ def test_sources_tab_gaussian_beam_lists_disabled_custom_source_time(qtbot) -> N
     tab.kind_input.setCurrentText("gaussian_beam")
 
     assert [tab.src_name.itemText(i) for i in range(tab.src_name.count())] == ["custom_time"]
+
+
+def test_sources_tab_gaussian_beam_lists_disabled_chirped_pulse_source_time(qtbot) -> None:
+    store = ProjectStore()
+    store.state.sources.append(
+        SourceItem(
+            name="chirp_time",
+            kind="chirped_pulse",
+            component="Ez",
+            props={"v0": "0.8", "a": "0.1", "b": "0.05", "t0": "7"},
+            enabled=False,
+        )
+    )
+    tab = SourcesTab(store)
+    qtbot.addWidget(tab)
+    tab.show()
+
+    tab.kind_input.setCurrentText("gaussian_beam")
+
+    assert [tab.src_name.itemText(i) for i in range(tab.src_name.count())] == ["chirp_time"]
 
 
 def test_geometry_edit_dialog_hides_irrelevant_rows_and_preserves_switched_values(qtbot) -> None:
@@ -1792,6 +1841,37 @@ def test_source_edit_dialog_round_trips_custom_checkbox_and_sections(qtbot) -> N
     assert dialog.result is not None
     assert dialog.result.props["is_integrated"] is True
     assert dialog.result.props["amp_func"] == "x - y"
+
+
+def test_source_edit_dialog_round_trips_chirped_pulse_fields(qtbot) -> None:
+    store = ProjectStore()
+    dialog = SourceEditDialog(
+        store,
+        SourceItem(
+            name="chirp",
+            kind="chirped_pulse",
+            component="Ez",
+            props={"v0": "1.0", "a": "0.2", "b": "-0.5", "t0": "15"},
+        ),
+    )
+    qtbot.addWidget(dialog)
+    dialog.show()
+
+    assert not dialog.spatial_header.isHidden()
+    assert not dialog.temporal_header.isHidden()
+    _assert_form_row_visible(dialog.form, dialog.v0)
+    _assert_form_row_visible(dialog.form, dialog.a)
+    _assert_form_row_visible(dialog.form, dialog.b)
+    _assert_form_row_visible(dialog.form, dialog.t0)
+    _assert_form_row_hidden(dialog.form, dialog.src_func)
+
+    dialog.b.setText("0.3")
+    dialog.t0.setText("9")
+    qtbot.mouseClick(dialog.save_button, QtCore.Qt.LeftButton)
+
+    assert dialog.result is not None
+    assert dialog.result.props["b"] == "0.3"
+    assert dialog.result.props["t0"] == "9"
 
 
 def test_source_edit_dialog_edits_gaussian_beam_on_flag_and_complex_e0(qtbot) -> None:

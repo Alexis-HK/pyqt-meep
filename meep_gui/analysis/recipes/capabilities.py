@@ -104,7 +104,7 @@ def extract_scene_features(
             features.add(SceneFeature.CONTINUOUS_SOURCES)
         if any(source.source_time_kind == "gaussian" for source in enabled_sources):
             features.add(SceneFeature.GAUSSIAN_SOURCES)
-        if any(source.source_time_kind == "custom" for source in enabled_sources):
+        if any(source.source_time_kind in {"custom", "chirped_pulse"} for source in enabled_sources):
             features.add(SceneFeature.CUSTOM_TEMPORAL_SOURCES)
         if compiled_scene.monitors:
             features.add(SceneFeature.FLUX_MONITORS)

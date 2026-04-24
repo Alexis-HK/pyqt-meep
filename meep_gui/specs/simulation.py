@@ -26,6 +26,10 @@ class SourceTimeSpec:
     is_integrated: bool = False
     center_frequency: float = 0.0
     fwidth: float = 0.0
+    chirp_v0: float = 1.0
+    chirp_a: float = 0.2
+    chirp_b: float = -0.5
+    chirp_t0: float = 15.0
 
 
 @dataclass

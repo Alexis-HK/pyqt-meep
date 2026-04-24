@@ -25,12 +25,30 @@ def _emit_header(lines: list[str], plan: ScriptPlan) -> None:
     line(lines, "from math import sqrt, exp, sin, cos, tan, log, log10")
     line(lines, "import csv")
     line(lines, "import os")
+    if _plan_uses_cmath(plan):
+        line(lines, "import cmath")
     line(lines, "import meep as mp")
     if plan.backend == "mpb":
         line(lines, "from meep import mpb")
     line(lines)
     line(lines, "script_dir = os.path.dirname(os.path.abspath(__file__))")
     line(lines)
+
+
+def _iter_plan_scenes(plan: ScriptPlan):
+    if plan.scene is not None:
+        yield plan.scene.scene
+    if plan.transmission is not None:
+        yield plan.transmission.scattering.scene
+        yield plan.transmission.reference.scene
+
+
+def _plan_uses_cmath(plan: ScriptPlan) -> bool:
+    return any(
+        source.source_time_kind == "chirped_pulse"
+        for scene in _iter_plan_scenes(plan)
+        for source in scene.sources
+    )
 
 
 def _primary_scene(plan: ScriptPlan):

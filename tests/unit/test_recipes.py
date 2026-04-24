@@ -81,6 +81,26 @@ def test_prepare_runtime_analysis_reports_custom_temporal_source_forbidden_featu
     ]
 
 
+def test_prepare_runtime_analysis_reports_chirped_pulse_as_custom_temporal_source() -> None:
+    state = ProjectState(
+        analysis=AnalysisConfig(kind="frequency_domain_solver"),
+        sources=[
+            SourceItem(
+                name="chirp",
+                kind="chirped_pulse",
+                component="Ez",
+                props={"v0": "0.8", "a": "0.1", "b": "0.05", "t0": "7"},
+            )
+        ],
+    )
+
+    prepared = prepare_runtime_analysis(state)
+
+    assert [item.message for item in prepared.validation.errors] == [
+        "Frequency-domain solver supports only continuous sources. Custom temporal sources are not supported."
+    ]
+
+
 def test_recipe_specific_error_message_wins_over_generic_capability_message() -> None:
     state = ProjectState(
         analysis=AnalysisConfig(kind="harminv"),
@@ -280,6 +300,33 @@ def test_gaussian_beam_inherits_custom_temporal_source_capability() -> None:
                 kind="gaussian_beam",
                 component="Ez",
                 props={"src": "custom_time"},
+            ),
+        ],
+    )
+
+    prepared = prepare_runtime_analysis(state)
+
+    assert [item.message for item in prepared.validation.errors] == [
+        "Frequency-domain solver supports only continuous sources. Custom temporal sources are not supported."
+    ]
+
+
+def test_gaussian_beam_inherits_chirped_pulse_temporal_source_capability() -> None:
+    state = ProjectState(
+        analysis=AnalysisConfig(kind="frequency_domain_solver"),
+        sources=[
+            SourceItem(
+                name="chirp_time",
+                kind="chirped_pulse",
+                component="Ez",
+                props={"v0": "0.8", "a": "0.1", "b": "0.05", "t0": "7"},
+                enabled=False,
+            ),
+            SourceItem(
+                name="beam",
+                kind="gaussian_beam",
+                component="Ez",
+                props={"src": "chirp_time"},
             ),
         ],
     )

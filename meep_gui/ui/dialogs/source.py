@@ -51,6 +51,10 @@ class SourceEditDialog(QtWidgets.QDialog):
         self.is_integrated = QtWidgets.QCheckBox()
         self.center_frequency = QtWidgets.QLineEdit()
         self.fwidth = QtWidgets.QLineEdit()
+        self.v0 = QtWidgets.QLineEdit()
+        self.a = QtWidgets.QLineEdit()
+        self.b = QtWidgets.QLineEdit()
+        self.t0 = QtWidgets.QLineEdit()
         self.beam_x0_x = QtWidgets.QLineEdit()
         self.beam_x0_y = QtWidgets.QLineEdit()
         self.beam_kdir_x = QtWidgets.QLineEdit()
@@ -75,6 +79,10 @@ class SourceEditDialog(QtWidgets.QDialog):
             "is_integrated": self.is_integrated,
             "center_frequency": self.center_frequency,
             "fwidth": self.fwidth,
+            "v0": self.v0,
+            "a": self.a,
+            "b": self.b,
+            "t0": self.t0,
             "beam_x0_x": self.beam_x0_x,
             "beam_x0_y": self.beam_x0_y,
             "beam_kdir_x": self.beam_kdir_x,
@@ -101,6 +109,10 @@ class SourceEditDialog(QtWidgets.QDialog):
         self.form.addRow("Amplitude", self.amplitude)
         self.form.addRow("amp_func", self.amp_func)
         self.form.addRow(self.temporal_header)
+        self.form.addRow("v0", self.v0)
+        self.form.addRow("a", self.a)
+        self.form.addRow("b", self.b)
+        self.form.addRow("t0", self.t0)
         self.form.addRow("src_func", self.src_func)
         self.form.addRow("Start Time", self.start_time)
         self.form.addRow("End Time", self.end_time)
@@ -172,8 +184,8 @@ class SourceEditDialog(QtWidgets.QDialog):
         for field_id, widget in self._prop_widgets.items():
             _set_form_row_visible(self.form, widget, field_id in visible_fields)
         _set_form_row_visible(self.form, self.component_input, kind != "gaussian_beam")
-        spatial_visible = kind == "custom" and any(field.section == "spatial" for field in fields)
-        temporal_visible = kind == "custom" and any(field.section == "temporal" for field in fields)
+        spatial_visible = any(field.section == "spatial" for field in fields)
+        temporal_visible = any(field.section == "temporal" for field in fields)
         self.spatial_header.setVisible(spatial_visible)
         self.temporal_header.setVisible(temporal_visible)
 
@@ -181,7 +193,9 @@ class SourceEditDialog(QtWidgets.QDialog):
         return [
             src.name
             for src in active_scope(self.store).sources
-            if src.name and src.name != self._exclude and src.kind in {"continuous", "gaussian", "custom"}
+            if src.name
+            and src.name != self._exclude
+            and src.kind in {"continuous", "gaussian", "custom", "chirped_pulse"}
         ]
 
     def _refresh_source_ref_choices(self, current: str = "", exclude: str = "") -> None:
