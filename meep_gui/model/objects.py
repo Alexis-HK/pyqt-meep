@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+SourcePropValue = str | bool
+
 
 @dataclass(frozen=True)
 class Parameter:
@@ -28,7 +30,7 @@ class SourceItem:
     name: str
     kind: str
     component: str
-    props: dict[str, str] = field(default_factory=dict)
+    props: dict[str, SourcePropValue] = field(default_factory=dict)
     enabled: bool = True
 
 

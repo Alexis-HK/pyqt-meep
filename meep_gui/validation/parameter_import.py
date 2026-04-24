@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .expressions import validate_numeric_expression
-from .names import NameRegistry, validate_name
+from .names import NameRegistry, validate_parameter_name
 
 
 def parse_parameter_import_text(text: str, registry: NameRegistry) -> list[tuple[str, str]]:
@@ -37,7 +37,7 @@ def parse_parameter_import_text(text: str, registry: NameRegistry) -> list[tuple
             geometries=set(base_registry.geometries),
             sources=set(base_registry.sources),
         )
-        name_result = validate_name(name, line_registry)
+        name_result = validate_parameter_name(name, line_registry)
         if not name_result.ok:
             raise ValueError(f"Line {line_no}: {name_result.message}")
 

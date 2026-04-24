@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import ast
+from collections.abc import Callable, Iterable, Mapping
 import math
 import random
 from dataclasses import dataclass
-from typing import Iterable
 
 from .errors import ValidationResult
 
@@ -107,17 +107,31 @@ def _parse_expr(
     return tree
 
 
-def validate_numeric_expression(expr: str, allowed_names: Iterable[str]) -> ValidationResult:
+def _combined_names(
+    allowed_names: Iterable[str],
+    extra_names: Iterable[str] = (),
+) -> set[str]:
+    return set(allowed_names) | set(extra_names)
+
+
+def validate_numeric_expression(
+    expr: str,
+    allowed_names: Iterable[str],
+    *,
+    extra_names: Iterable[str] = (),
+) -> ValidationResult:
     try:
-        _parse_expr(expr, set(allowed_names))
+        _parse_expr(expr, _combined_names(allowed_names, extra_names))
     except ValueError as exc:
         return ValidationResult(False, str(exc))
     return ValidationResult(True, "")
 
 
-def evaluate_numeric_expression(expr: str, variables: dict[str, float]) -> float:
-    tree = _parse_expr(expr, set(variables.keys()))
-
+def _eval_numeric_tree(
+    tree: ast.AST,
+    variables: Mapping[str, float],
+    expr: str,
+) -> float:
     def _eval(node: ast.AST) -> float:
         if isinstance(node, ast.Expression):
             return _eval(node.body)
@@ -154,6 +168,40 @@ def evaluate_numeric_expression(expr: str, variables: dict[str, float]) -> float
         return float(_eval(tree))
     except Exception as exc:
         raise ValueError(f"Invalid expression: {expr}") from exc
+
+
+def evaluate_numeric_expression(
+    expr: str,
+    variables: Mapping[str, float],
+    *,
+    extra_values: Mapping[str, float] | None = None,
+) -> float:
+    names = _combined_names(variables.keys(), () if extra_values is None else extra_values.keys())
+    tree = _parse_expr(expr, names)
+    combined = dict(variables)
+    if extra_values:
+        combined.update(extra_values)
+    return _eval_numeric_tree(tree, combined, expr)
+
+
+def compile_numeric_expression(
+    expr: str,
+    allowed_names: Iterable[str],
+    *,
+    extra_names: Iterable[str] = (),
+) -> Callable[[Mapping[str, float], Mapping[str, float] | None], float]:
+    tree = _parse_expr(expr, _combined_names(allowed_names, extra_names))
+
+    def _evaluate(
+        variables: Mapping[str, float],
+        extra_values: Mapping[str, float] | None = None,
+    ) -> float:
+        combined = dict(variables)
+        if extra_values:
+            combined.update(extra_values)
+        return _eval_numeric_tree(tree, combined, expr)
+
+    return _evaluate
 
 
 def _check_complex_node(node: ast.AST, allowed_names: set[str]) -> None:
@@ -213,17 +261,24 @@ def _parse_complex_expr(
     return tree
 
 
-def validate_complex_expression(expr: str, allowed_names: Iterable[str]) -> ValidationResult:
+def validate_complex_expression(
+    expr: str,
+    allowed_names: Iterable[str],
+    *,
+    extra_names: Iterable[str] = (),
+) -> ValidationResult:
     try:
-        _parse_complex_expr(expr, set(allowed_names))
+        _parse_complex_expr(expr, _combined_names(allowed_names, extra_names))
     except ValueError as exc:
         return ValidationResult(False, str(exc))
     return ValidationResult(True, "")
 
 
-def evaluate_complex_expression(expr: str, variables: dict[str, float]) -> complex:
-    tree = _parse_complex_expr(expr, set(variables.keys()))
-
+def _eval_complex_tree(
+    tree: ast.AST,
+    variables: Mapping[str, float | complex],
+    expr: str,
+) -> complex:
     def _real_arg(value: complex, expr: str) -> float:
         if abs(value.imag) > 1e-15:
             raise ValueError(f"Invalid expression: {expr}")
@@ -267,6 +322,40 @@ def evaluate_complex_expression(expr: str, variables: dict[str, float]) -> compl
         raise
     except Exception as exc:
         raise ValueError(f"Invalid expression: {expr}") from exc
+
+
+def evaluate_complex_expression(
+    expr: str,
+    variables: Mapping[str, float | complex],
+    *,
+    extra_values: Mapping[str, float | complex] | None = None,
+) -> complex:
+    names = _combined_names(variables.keys(), () if extra_values is None else extra_values.keys())
+    tree = _parse_complex_expr(expr, names)
+    combined: dict[str, float | complex] = dict(variables)
+    if extra_values:
+        combined.update(extra_values)
+    return _eval_complex_tree(tree, combined, expr)
+
+
+def compile_complex_expression(
+    expr: str,
+    allowed_names: Iterable[str],
+    *,
+    extra_names: Iterable[str] = (),
+) -> Callable[[Mapping[str, float | complex], Mapping[str, float | complex] | None], complex]:
+    tree = _parse_complex_expr(expr, _combined_names(allowed_names, extra_names))
+
+    def _evaluate(
+        variables: Mapping[str, float | complex],
+        extra_values: Mapping[str, float | complex] | None = None,
+    ) -> complex:
+        combined: dict[str, float | complex] = dict(variables)
+        if extra_values:
+            combined.update(extra_values)
+        return _eval_complex_tree(tree, combined, expr)
+
+    return _evaluate
 
 
 def _normalize_complex_literal(expr: str) -> str:

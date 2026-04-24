@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 
@@ -15,16 +16,29 @@ class Shape:
 
 
 @dataclass
+class SourceTimeSpec:
+    kind: str
+    frequency: float = 0.15
+    bandwidth: float = 0.0
+    src_func: Callable[[float], complex] | None = None
+    start_time: float = -1e20
+    end_time: float = 1e20
+    is_integrated: bool = False
+    center_frequency: float = 0.0
+    fwidth: float = 0.0
+
+
+@dataclass
 class SourceSpec:
     kind: str
     center_x: float
     center_y: float
     width_x: float = 0.0
     width_y: float = 0.0
-    frequency: float = 0.15
-    bandwidth: float = 0.0
     component: str = "Ez"
-    source_time_kind: str = ""
+    amplitude: complex = 1 + 0j
+    amp_func: Callable[[float, float], complex] | None = None
+    source_time: SourceTimeSpec | None = None
     beam_x0_x: float = 0.0
     beam_x0_y: float = 0.0
     beam_kdir_x: float = 0.0
@@ -33,6 +47,24 @@ class SourceSpec:
     beam_e0_x: complex = 0j
     beam_e0_y: complex = 0j
     beam_e0_z: complex = 1 + 0j
+
+    @property
+    def frequency(self) -> float:
+        if self.source_time is None:
+            return 0.0
+        return self.source_time.frequency
+
+    @property
+    def bandwidth(self) -> float:
+        if self.source_time is None:
+            return 0.0
+        return self.source_time.bandwidth
+
+    @property
+    def source_time_kind(self) -> str:
+        if self.source_time is None:
+            return ""
+        return self.source_time.kind
 
 
 @dataclass

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PyQt5 import QtWidgets
 
-from ...model import FIELD_COMPONENTS, SourceItem
+from ...model import FIELD_COMPONENTS, SourceItem, normalize_bool
 from ...primitives import SOURCE_REGISTRY, source_kind
 from ...store import ProjectStore
 from ...validation import (
@@ -27,6 +27,10 @@ class SourcesTab(QtWidgets.QWidget):
         self.enabled_input.setChecked(True)
         self.kind_input = QtWidgets.QComboBox()
         self.kind_input.addItems(list(SOURCE_REGISTRY))
+        self.spatial_header = QtWidgets.QLabel("Spatial component")
+        self.temporal_header = QtWidgets.QLabel("Temporal component")
+        for header in (self.spatial_header, self.temporal_header):
+            header.setStyleSheet("font-weight: 600;")
         self.component_input = QtWidgets.QComboBox()
         self.component_input.addItems(list(FIELD_COMPONENTS))
         self.src_name = QtWidgets.QComboBox()
@@ -36,6 +40,14 @@ class SourcesTab(QtWidgets.QWidget):
         self.size_y = QtWidgets.QLineEdit()
         self.fcen = QtWidgets.QLineEdit()
         self.df = QtWidgets.QLineEdit()
+        self.amplitude = QtWidgets.QLineEdit()
+        self.amp_func = QtWidgets.QLineEdit()
+        self.src_func = QtWidgets.QLineEdit()
+        self.start_time = QtWidgets.QLineEdit()
+        self.end_time = QtWidgets.QLineEdit()
+        self.is_integrated = QtWidgets.QCheckBox()
+        self.center_frequency = QtWidgets.QLineEdit()
+        self.fwidth = QtWidgets.QLineEdit()
         self.beam_x0_x = QtWidgets.QLineEdit()
         self.beam_x0_y = QtWidgets.QLineEdit()
         self.beam_kdir_x = QtWidgets.QLineEdit()
@@ -52,6 +64,14 @@ class SourcesTab(QtWidgets.QWidget):
             "size_y": self.size_y,
             "fcen": self.fcen,
             "df": self.df,
+            "amplitude": self.amplitude,
+            "amp_func": self.amp_func,
+            "src_func": self.src_func,
+            "start_time": self.start_time,
+            "end_time": self.end_time,
+            "is_integrated": self.is_integrated,
+            "center_frequency": self.center_frequency,
+            "fwidth": self.fwidth,
             "beam_x0_x": self.beam_x0_x,
             "beam_x0_y": self.beam_x0_y,
             "beam_kdir_x": self.beam_kdir_x,
@@ -66,6 +86,7 @@ class SourcesTab(QtWidgets.QWidget):
         self.form.addRow("Name", self.name_input)
         self.form.addRow("ON", self.enabled_input)
         self.form.addRow("Type", self.kind_input)
+        self.form.addRow(self.spatial_header)
         self.form.addRow("Component", self.component_input)
         self.form.addRow("SourceTime", self.src_name)
         self.form.addRow("Center X", self.center_x)
@@ -74,6 +95,15 @@ class SourcesTab(QtWidgets.QWidget):
         self.form.addRow("Size Y", self.size_y)
         self.form.addRow("Frequency", self.fcen)
         self.form.addRow("Bandwidth", self.df)
+        self.form.addRow("Amplitude", self.amplitude)
+        self.form.addRow("amp_func", self.amp_func)
+        self.form.addRow(self.temporal_header)
+        self.form.addRow("src_func", self.src_func)
+        self.form.addRow("Start Time", self.start_time)
+        self.form.addRow("End Time", self.end_time)
+        self.form.addRow("Is Integrated", self.is_integrated)
+        self.form.addRow("Center Frequency", self.center_frequency)
+        self.form.addRow("Fwidth", self.fwidth)
         self.form.addRow("Focus X", self.beam_x0_x)
         self.form.addRow("Focus Y", self.beam_x0_y)
         self.form.addRow("Direction X", self.beam_kdir_x)
@@ -119,27 +149,48 @@ class SourcesTab(QtWidgets.QWidget):
             return selection[0].row()
         return -1
 
+    def _field_value(self, field_id: str) -> str | bool:
+        widget = self._prop_widgets[field_id]
+        if isinstance(widget, QtWidgets.QComboBox):
+            return widget.currentText().strip()
+        if isinstance(widget, QtWidgets.QCheckBox):
+            return widget.isChecked()
+        return widget.text().strip()
+
+    def _set_field_value(self, field_id: str, value: str | bool) -> None:
+        widget = self._prop_widgets[field_id]
+        if isinstance(widget, QtWidgets.QComboBox):
+            widget.setCurrentText(str(value).strip())
+        elif isinstance(widget, QtWidgets.QCheckBox):
+            widget.setChecked(normalize_bool(value, False))
+        else:
+            widget.setText("" if value is None else str(value))
+
     def _sync_kind_fields(self, kind: str) -> None:
-        self._refresh_source_ref_choices(self.src_name.currentText())
+        self._refresh_source_ref_choices(str(self._field_value("src")))
         fields = source_kind(kind).fields
+        visible_fields = {field.field_id for field in fields}
         for field in fields:
             widget = self._prop_widgets[field.field_id]
             if (
-                field.default
-                and isinstance(widget, QtWidgets.QLineEdit)
+                isinstance(widget, QtWidgets.QLineEdit)
+                and field.default != ""
                 and not widget.text().strip()
             ):
-                widget.setText(field.default)
-        visible_fields = {field.field_id for field in fields}
+                widget.setText(str(field.default))
         for field_id, widget in self._prop_widgets.items():
             _set_form_row_visible(self.form, widget, field_id in visible_fields)
         _set_form_row_visible(self.form, self.component_input, kind != "gaussian_beam")
+        spatial_visible = kind == "custom" and any(field.section == "spatial" for field in fields)
+        temporal_visible = kind == "custom" and any(field.section == "temporal" for field in fields)
+        self.spatial_header.setVisible(spatial_visible)
+        self.temporal_header.setVisible(temporal_visible)
 
     def _source_ref_names(self, exclude: str = "") -> list[str]:
         return [
             src.name
             for src in active_scope(self.store).sources
-            if src.name and src.name != exclude and src.kind in {"continuous", "gaussian"}
+            if src.name and src.name != exclude and src.kind in {"continuous", "gaussian", "custom"}
         ]
 
     def _refresh_source_ref_choices(self, current: str = "", exclude: str = "") -> None:
@@ -158,42 +209,52 @@ class SourcesTab(QtWidgets.QWidget):
             return ValidationResult(False, f"Unknown SourceTime source: {value}")
         return ValidationResult(True, "")
 
+    def _validate_field(self, field, value: str | bool, *, exclude: str = "") -> ValidationResult:
+        allowed = parameter_names(self.store)
+        if field.value_type == "bool":
+            return ValidationResult(True, "")
+        if value == "" and not field.required:
+            return ValidationResult(True, "")
+        if field.value_type == "source_ref":
+            return self._validate_source_ref(str(value).strip(), exclude=exclude)
+        if field.value_type == "complex":
+            return validate_complex_expression(
+                str(value).strip(),
+                allowed,
+                extra_names=field.allowed_locals,
+            )
+        return validate_numeric_expression(
+            str(value).strip(),
+            allowed,
+            extra_names=field.allowed_locals,
+        )
+
     def _validate(self, name: str, kind: str, row: int) -> bool:
         scope = active_scope(self.store)
         registry = scope.name_registry()
         sources = scope.sources
-        exclude = None
+        exclude = ""
         if 0 <= row < len(sources):
             exclude = sources[row].name
-        name_result = validate_name(name, registry, exclude=exclude)
+        name_result = validate_name(name, registry, exclude=exclude or None)
         _set_invalid(self.name_input, not name_result.ok)
         if not name_result.ok:
             _log_error(self.store, name_result.message, self)
             return False
 
-        allowed = parameter_names(self.store)
         ok = True
         for field in source_kind(kind).fields:
-            widget = self._prop_widgets[field.field_id]
-            if field.value_type == "source_ref":
-                result = self._validate_source_ref(widget.currentText().strip())
-            elif field.value_type == "complex":
-                result = validate_complex_expression(widget.text().strip(), allowed)
-            else:
-                result = validate_numeric_expression(widget.text().strip(), allowed)
-            _set_invalid(widget, not result.ok)
+            value = self._field_value(field.field_id)
+            result = self._validate_field(field, value, exclude=exclude)
+            _set_invalid(self._prop_widgets[field.field_id], not result.ok)
             if not result.ok:
                 _log_error(self.store, f"{field.field_id}: {result.message}", self)
                 ok = False
         return ok
 
-    def _build_props(self, kind: str) -> dict[str, str]:
+    def _build_props(self, kind: str) -> dict[str, str | bool]:
         return {
-            field.field_id: (
-                self._prop_widgets[field.field_id].currentText().strip()
-                if field.value_type == "source_ref"
-                else self._prop_widgets[field.field_id].text().strip()
-            )
+            field.field_id: self._field_value(field.field_id)
             for field in source_kind(kind).fields
         }
 
@@ -251,19 +312,15 @@ class SourcesTab(QtWidgets.QWidget):
         self.enabled_input.setChecked(item.enabled)
         self.kind_input.setCurrentText(item.kind)
         self.component_input.setCurrentText(item.component)
-        self._refresh_source_ref_choices(item.props.get("src", ""), exclude=item.name)
-        for field_id, widget in self._prop_widgets.items():
-            if isinstance(widget, QtWidgets.QComboBox):
-                widget.setCurrentText(item.props.get(field_id, ""))
-            else:
-                widget.setText(item.props.get(field_id, ""))
+        self._refresh_source_ref_choices(str(item.props.get("src", "")), exclude=item.name)
+        for field_id in self._prop_widgets:
+            self._set_field_value(field_id, item.props.get(field_id, ""))
         self._sync_kind_fields(item.kind)
         _set_invalid(self.name_input, False)
 
     def refresh(self) -> None:
         self.table.setRowCount(0)
         invalid: dict[str, str] = {}
-        allowed = parameter_names(self.store)
         for src in active_scope(self.store).sources:
             row = self.table.rowCount()
             self.table.insertRow(row)
@@ -278,12 +335,7 @@ class SourcesTab(QtWidgets.QWidget):
             message = ""
             for field in source_kind(src.kind).fields:
                 value = src.props.get(field.field_id, "")
-                if field.value_type == "source_ref":
-                    result = self._validate_source_ref(value, exclude=src.name)
-                elif field.value_type == "complex":
-                    result = validate_complex_expression(value, allowed)
-                else:
-                    result = validate_numeric_expression(value, allowed)
+                result = self._validate_field(field, value, exclude=src.name)
                 if not result.ok:
                     message = f"Source '{src.name}': {field.field_id} {result.message}"
                     break

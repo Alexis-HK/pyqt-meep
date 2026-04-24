@@ -21,6 +21,7 @@ _SEVERITY_ORDER: dict[SupportStatus, int] = {
 _FEATURE_LABELS: dict[SceneFeature, str] = {
     SceneFeature.CONTINUOUS_SOURCES: "continuous sources",
     SceneFeature.GAUSSIAN_SOURCES: "Gaussian (pulsed) sources",
+    SceneFeature.CUSTOM_TEMPORAL_SOURCES: "custom temporal sources",
     SceneFeature.FLUX_MONITORS: "flux monitors",
     SceneFeature.DOMAIN_SYMMETRIES: "domain symmetries",
     SceneFeature.CYLINDRICAL_COORDINATES: "cylindrical coordinates",
@@ -39,6 +40,7 @@ _BACKEND_CAPABILITIES: dict[
     ("meep_fdtd", "runtime"): {
         SceneFeature.CONTINUOUS_SOURCES: SupportStatus.SUPPORTED,
         SceneFeature.GAUSSIAN_SOURCES: SupportStatus.SUPPORTED,
+        SceneFeature.CUSTOM_TEMPORAL_SOURCES: SupportStatus.SUPPORTED,
         SceneFeature.FLUX_MONITORS: SupportStatus.SUPPORTED,
         SceneFeature.DOMAIN_SYMMETRIES: SupportStatus.SUPPORTED,
         SceneFeature.CYLINDRICAL_COORDINATES: SupportStatus.SUPPORTED,
@@ -47,6 +49,7 @@ _BACKEND_CAPABILITIES: dict[
     ("meep_fdtd", "script"): {
         SceneFeature.CONTINUOUS_SOURCES: SupportStatus.SUPPORTED,
         SceneFeature.GAUSSIAN_SOURCES: SupportStatus.SUPPORTED,
+        SceneFeature.CUSTOM_TEMPORAL_SOURCES: SupportStatus.SUPPORTED,
         SceneFeature.FLUX_MONITORS: SupportStatus.SUPPORTED,
         SceneFeature.DOMAIN_SYMMETRIES: SupportStatus.SUPPORTED,
         SceneFeature.CYLINDRICAL_COORDINATES: SupportStatus.SUPPORTED,
@@ -55,6 +58,7 @@ _BACKEND_CAPABILITIES: dict[
     ("mpb", "runtime"): {
         SceneFeature.CONTINUOUS_SOURCES: SupportStatus.IGNORED,
         SceneFeature.GAUSSIAN_SOURCES: SupportStatus.IGNORED,
+        SceneFeature.CUSTOM_TEMPORAL_SOURCES: SupportStatus.IGNORED,
         SceneFeature.FLUX_MONITORS: SupportStatus.IGNORED,
         SceneFeature.DOMAIN_SYMMETRIES: SupportStatus.IGNORED,
         SceneFeature.CYLINDRICAL_COORDINATES: SupportStatus.IGNORED,
@@ -63,6 +67,7 @@ _BACKEND_CAPABILITIES: dict[
     ("mpb", "script"): {
         SceneFeature.CONTINUOUS_SOURCES: SupportStatus.IGNORED,
         SceneFeature.GAUSSIAN_SOURCES: SupportStatus.IGNORED,
+        SceneFeature.CUSTOM_TEMPORAL_SOURCES: SupportStatus.IGNORED,
         SceneFeature.FLUX_MONITORS: SupportStatus.IGNORED,
         SceneFeature.DOMAIN_SYMMETRIES: SupportStatus.IGNORED,
         SceneFeature.CYLINDRICAL_COORDINATES: SupportStatus.IGNORED,
@@ -95,18 +100,12 @@ def extract_scene_features(
 
     for compiled_scene in scenes:
         enabled_sources = [source for source in compiled_scene.sources if source.enabled]
-        if any(
-            source.kind == "continuous"
-            or (source.kind == "gaussian_beam" and source.source_time_kind == "continuous")
-            for source in enabled_sources
-        ):
+        if any(source.source_time_kind == "continuous" for source in enabled_sources):
             features.add(SceneFeature.CONTINUOUS_SOURCES)
-        if any(
-            source.kind == "gaussian"
-            or (source.kind == "gaussian_beam" and source.source_time_kind == "gaussian")
-            for source in enabled_sources
-        ):
+        if any(source.source_time_kind == "gaussian" for source in enabled_sources):
             features.add(SceneFeature.GAUSSIAN_SOURCES)
+        if any(source.source_time_kind == "custom" for source in enabled_sources):
+            features.add(SceneFeature.CUSTOM_TEMPORAL_SOURCES)
         if compiled_scene.monitors:
             features.add(SceneFeature.FLUX_MONITORS)
         if compiled_scene.symmetries:

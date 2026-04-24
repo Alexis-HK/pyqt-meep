@@ -4,7 +4,7 @@ from PyQt5 import QtWidgets
 
 from ...model import Parameter
 from ...store import ProjectStore
-from ...validation import NameRegistry, validate_name, validate_numeric_expression
+from ...validation import NameRegistry, validate_numeric_expression, validate_parameter_name
 from ..common import _log_error, _set_invalid
 from ..scope import parameter_names
 
@@ -47,7 +47,7 @@ class ParameterEditDialog(QtWidgets.QDialog):
         name = self.name_input.text().strip()
         expr = self.expr_input.text().strip()
         registry = NameRegistry.from_state(self.store.state)
-        name_result = validate_name(name, registry, exclude=self._exclude)
+        name_result = validate_parameter_name(name, registry, exclude=self._exclude)
         _set_invalid(self.name_input, not name_result.ok)
         if not name_result.ok:
             _log_error(self.store, name_result.message, self)

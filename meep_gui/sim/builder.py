@@ -49,13 +49,30 @@ def build_sim(params: SimParams, log: LogFn, *, force_complex_fields: bool = Fal
 
     sources = []
     for spec in params.sources:
+        source_time = spec.source_time
+        if source_time is None:
+            raise ValueError(f"Source '{spec.kind}' is missing a SourceTime.")
+
+        def build_source_time():
+            if source_time.kind == "gaussian":
+                return mp.GaussianSource(frequency=source_time.frequency, fwidth=source_time.bandwidth)
+            if source_time.kind == "continuous":
+                return mp.ContinuousSource(frequency=source_time.frequency)
+            if source_time.kind == "custom":
+                if source_time.src_func is None:
+                    raise ValueError("Custom source is missing src_func.")
+                return mp.CustomSource(
+                    src_func=source_time.src_func,
+                    start_time=source_time.start_time,
+                    end_time=source_time.end_time,
+                    is_integrated=source_time.is_integrated,
+                    center_frequency=source_time.center_frequency,
+                    fwidth=source_time.fwidth,
+                )
+            raise ValueError("Source references an unsupported SourceTime.")
+
         if spec.kind == "gaussian_beam":
-            if spec.source_time_kind == "gaussian":
-                src_time = mp.GaussianSource(frequency=spec.frequency, fwidth=spec.bandwidth)
-            elif spec.source_time_kind == "continuous":
-                src_time = mp.ContinuousSource(frequency=spec.frequency)
-            else:
-                raise ValueError("Gaussian beam source references an unsupported SourceTime.")
+            src_time = build_source_time()
             sources.append(
                 mp.GaussianBeamSource(
                     src=src_time,
@@ -70,18 +87,17 @@ def build_sim(params: SimParams, log: LogFn, *, force_complex_fields: bool = Fal
             continue
 
         comp = components.get(spec.component, mp.Ez)
-        if spec.kind == "gaussian":
-            src = mp.GaussianSource(frequency=spec.frequency, fwidth=spec.bandwidth)
-        else:
-            src = mp.ContinuousSource(frequency=spec.frequency)
-        sources.append(
-            mp.Source(
-                src,
-                component=comp,
-                center=mp.Vector3(spec.center_x, spec.center_y),
-                size=mp.Vector3(spec.width_x, spec.width_y, 0),
-            )
+        src = build_source_time()
+        source_kwargs = dict(
+            src=src,
+            component=comp,
+            center=mp.Vector3(spec.center_x, spec.center_y),
+            size=mp.Vector3(spec.width_x, spec.width_y, 0),
+            amplitude=spec.amplitude,
         )
+        if spec.amp_func is not None:
+            source_kwargs["amp_func"] = lambda pos, fn=spec.amp_func: fn(pos.x, pos.y)
+        sources.append(mp.Source(**source_kwargs))
 
     symmetries = []
     for spec in params.symmetries:

@@ -25,6 +25,7 @@ class SupportStatus(str, Enum):
 class SceneFeature(str, Enum):
     CONTINUOUS_SOURCES = "continuous_sources"
     GAUSSIAN_SOURCES = "gaussian_sources"
+    CUSTOM_TEMPORAL_SOURCES = "custom_temporal_sources"
     FLUX_MONITORS = "flux_monitors"
     DOMAIN_SYMMETRIES = "domain_symmetries"
     CYLINDRICAL_COORDINATES = "cylindrical_coordinates"

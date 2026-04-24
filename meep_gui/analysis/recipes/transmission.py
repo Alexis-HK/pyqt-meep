@@ -42,6 +42,7 @@ class TransmissionSpectrumRecipe(BaseRecipe):
     ) -> dict[SceneFeature, SupportStatus]:
         return {
             SceneFeature.CONTINUOUS_SOURCES: SupportStatus.FORBIDDEN,
+            SceneFeature.CUSTOM_TEMPORAL_SOURCES: SupportStatus.FORBIDDEN,
         }
 
     def validate(
@@ -54,6 +55,18 @@ class TransmissionSpectrumRecipe(BaseRecipe):
         cfg = state.analysis.transmission_spectrum
         issues: list[ValidationIssue] = []
         features = extract_scene_features(scene=plan.scene, transmission=plan.transmission)
+        if SceneFeature.CUSTOM_TEMPORAL_SOURCES in features:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    message=(
+                        "Transmission spectrum requires Gaussian (pulsed) sources for broadband normalization. "
+                        "Custom temporal sources are not supported."
+                    ),
+                    code="transmission:custom_source",
+                    feature=SceneFeature.CUSTOM_TEMPORAL_SOURCES.value,
+                )
+            )
         if SceneFeature.CONTINUOUS_SOURCES in features:
             issues.append(
                 ValidationIssue(

@@ -14,8 +14,11 @@ SceneEvalFn = Callable[[str, "CompilationContext", str], float]
 class PrimitiveField:
     field_id: str
     label: str
-    default: str = ""
+    default: str | bool = ""
     value_type: str = "numeric"
+    required: bool = True
+    allowed_locals: tuple[str, ...] = ()
+    section: str = ""
 
 
 @dataclass(frozen=True)

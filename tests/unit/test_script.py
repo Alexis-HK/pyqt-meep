@@ -154,6 +154,75 @@ def test_gaussian_beam_script_defines_disabled_temporal_source_without_appending
     assert "sources.append(sources_2)" in code
 
 
+def test_custom_source_script_emits_helper_functions_and_custom_source() -> None:
+    state = ProjectState(
+        sources=[
+            SourceItem(
+                name="custom_src",
+                kind="custom",
+                component="Ez",
+                props={
+                    "center_x": "0",
+                    "center_y": "1",
+                    "size_x": "2",
+                    "size_y": "0",
+                    "amplitude": "1+1j",
+                    "amp_func": "x + 1j*y",
+                    "src_func": "exp(-t*t)",
+                    "start_time": "-2",
+                    "end_time": "3",
+                    "is_integrated": True,
+                    "center_frequency": "0.25",
+                    "fwidth": "0.05",
+                },
+            )
+        ],
+        analysis=AnalysisConfig(kind="field_animation"),
+    )
+
+    code = generate_script(state)
+
+    assert "def sources_1_time_src_func(t):" in code
+    assert "return exp(-t*t)" in code
+    assert "def sources_1_amp_func(pos):" in code
+    assert "x = pos.x" in code
+    assert "y = pos.y" in code
+    assert "mp.CustomSource(src_func=sources_1_time_src_func" in code
+    assert "is_integrated=True" in code
+    assert "center_frequency=0.25" in code
+    assert "fwidth=0.05" in code
+    assert "amplitude=1+1j" in code
+    assert "amp_func=sources_1_amp_func" in code
+
+
+def test_gaussian_beam_script_can_inline_custom_temporal_source() -> None:
+    state = ProjectState(
+        sources=[
+            SourceItem(
+                name="custom_time",
+                kind="custom",
+                component="Ez",
+                props={"src_func": "t", "center_frequency": "0.3", "fwidth": "0.07"},
+                enabled=False,
+            ),
+            SourceItem(
+                name="beam",
+                kind="gaussian_beam",
+                component="Ez",
+                props={"src": "custom_time"},
+            ),
+        ],
+        analysis=AnalysisConfig(kind="field_animation"),
+    )
+
+    code = generate_script(state)
+
+    assert "def sources_2_time_src_func(t):" in code
+    assert "src=mp.CustomSource(src_func=sources_2_time_src_func" in code
+    assert "center_frequency=0.3" in code
+    assert "fwidth=0.07" in code
+
+
 def test_harminv_script_emits_flux_png_exports_when_monitors_exist() -> None:
     state = ProjectState(
         flux_monitors=[FluxMonitorConfig(name="tx")],

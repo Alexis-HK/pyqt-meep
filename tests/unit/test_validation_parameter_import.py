@@ -46,6 +46,11 @@ def test_parse_parameter_import_text_rejects_name_collisions_with_other_objects(
         parse_parameter_import_text("mat1 = 2\n", _registry())
 
 
+def test_parse_parameter_import_text_rejects_reserved_parameter_names() -> None:
+    with pytest.raises(ValueError, match=r"Line 1: Name 'x' is reserved\."):
+        parse_parameter_import_text("x = 2\n", _registry())
+
+
 def test_parse_parameter_import_text_rejects_forward_reference() -> None:
     with pytest.raises(ValueError, match=r"Line 1: Unknown name: a"):
         parse_parameter_import_text("b = a + 1\na = 1\n", _registry())

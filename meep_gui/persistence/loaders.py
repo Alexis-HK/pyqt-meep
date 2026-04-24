@@ -59,12 +59,25 @@ def load_geometries(raw: list[dict]) -> list[GeometryItem]:
 
 
 def load_sources(raw: list[dict]) -> list[SourceItem]:
+    def normalize_source_props(props: dict[str, Any]) -> dict[str, str | bool]:
+        normalized: dict[str, str | bool] = {}
+        for key, value in (props or {}).items():
+            if key == "is_integrated":
+                normalized[str(key)] = normalize_bool(value, False)
+            elif isinstance(value, bool):
+                normalized[str(key)] = value
+            elif value is None:
+                normalized[str(key)] = ""
+            else:
+                normalized[str(key)] = str(value)
+        return normalized
+
     return [
         SourceItem(
             name=item.get("name", ""),
             kind=item.get("kind", ""),
             component=item.get("component", "Ez"),
-            props=item.get("props", {}) or {},
+            props=normalize_source_props(item.get("props", {}) or {}),
             enabled=normalize_bool(item.get("enabled", True), True),
         )
         for item in raw

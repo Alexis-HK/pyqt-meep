@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import time
 
 import pytest
@@ -1351,10 +1352,11 @@ def test_analysis_tab_blocks_meep_k_points_with_continuous_source(qtbot, monkeyp
 
 def test_analysis_tab_logs_capability_warnings_before_running_mpb(qtbot, monkeypatch) -> None:
     store = ProjectStore()
-    store.state.domain.symmetry_enabled = True
-    store.state.domain.symmetries = [
-        SymmetryItem(name="mx", kind="mirror", direction="x", phase="-1")
-    ]
+    store.state.domain = replace(
+        store.state.domain,
+        symmetry_enabled=True,
+        symmetries=[SymmetryItem(name="mx", kind="mirror", direction="x", phase="-1")],
+    )
     store.state.sources = [
         SourceItem(
             name="pulse",
@@ -1519,8 +1521,10 @@ def test_parameters_tab_import_overwrites_and_invalid_import_is_atomic(
 
     assert [(p.name, p.expr) for p in store.state.parameters] == [("a", "1"), ("b", "a + sqrt(4)")]
     script = generate_script(store.state)
-    assert "a = 1" in script
-    assert "b = a + sqrt(4)" in script
+    assert "parameter_values['a'] = _eval_numeric('1', parameter_values)" in script
+    assert "a = parameter_values['a']" in script
+    assert "parameter_values['b'] = _eval_numeric('a + sqrt(4)', parameter_values)" in script
+    assert "b = parameter_values['b']" in script
 
     bad_path = tmp_path / "bad_params.txt"
     bad_path.write_text("good = 1\n\nbad = good + 1\n", encoding="utf-8")
@@ -1592,6 +1596,58 @@ def test_sources_tab_hides_irrelevant_rows_and_preserves_switched_values(qtbot) 
     assert tab.df.text() == "0.15"
 
 
+def test_parameters_tab_rejects_reserved_parameter_names(qtbot, monkeypatch) -> None:
+    store = ProjectStore()
+    tab = ParametersTab(store)
+    qtbot.addWidget(tab)
+
+    warnings: list[str] = []
+    monkeypatch.setattr(
+        QtWidgets.QMessageBox,
+        "warning",
+        lambda *_args: warnings.append(_args[2]),
+    )
+
+    tab.name_input.setText("x")
+    tab.expr_input.setText("1")
+    qtbot.mouseClick(tab.add_button, QtCore.Qt.LeftButton)
+
+    assert store.state.parameters == []
+    assert warnings == ["Name 'x' is reserved. Reserved names: t, x, y."]
+
+
+def test_sources_tab_shows_custom_sections_and_preserves_custom_values(qtbot) -> None:
+    store = ProjectStore()
+    tab = SourcesTab(store)
+    qtbot.addWidget(tab)
+    tab.show()
+
+    assert tab.spatial_header.isHidden()
+    assert tab.temporal_header.isHidden()
+
+    tab.kind_input.setCurrentText("custom")
+
+    assert not tab.spatial_header.isHidden()
+    assert not tab.temporal_header.isHidden()
+    _assert_form_row_visible(tab.form, tab.component_input)
+    _assert_form_row_visible(tab.form, tab.amplitude)
+    _assert_form_row_visible(tab.form, tab.amp_func)
+    _assert_form_row_visible(tab.form, tab.src_func)
+    _assert_form_row_visible(tab.form, tab.is_integrated)
+    _assert_form_row_hidden(tab.form, tab.fcen)
+    _assert_form_row_hidden(tab.form, tab.df)
+
+    tab.src_func.setText("exp(-t*t)")
+    tab.amp_func.setText("x + y")
+    tab.is_integrated.setChecked(True)
+    tab.kind_input.setCurrentText("gaussian")
+    tab.kind_input.setCurrentText("custom")
+
+    assert tab.src_func.text() == "exp(-t*t)"
+    assert tab.amp_func.text() == "x + y"
+    assert tab.is_integrated.isChecked() is True
+
+
 def test_sources_tab_adds_gaussian_beam_with_disabled_source_time(qtbot) -> None:
     store = ProjectStore()
     store.state.sources.append(
@@ -1625,6 +1681,26 @@ def test_sources_tab_adds_gaussian_beam_with_disabled_source_time(qtbot) -> None
     assert store.state.sources[1].enabled is True
     assert store.state.sources[1].props["src"] == "pulse"
     assert tab.table.item(1, 0).text() == "ON"
+
+
+def test_sources_tab_gaussian_beam_lists_disabled_custom_source_time(qtbot) -> None:
+    store = ProjectStore()
+    store.state.sources.append(
+        SourceItem(
+            name="custom_time",
+            kind="custom",
+            component="Ez",
+            props={"src_func": "t"},
+            enabled=False,
+        )
+    )
+    tab = SourcesTab(store)
+    qtbot.addWidget(tab)
+    tab.show()
+
+    tab.kind_input.setCurrentText("gaussian_beam")
+
+    assert [tab.src_name.itemText(i) for i in range(tab.src_name.count())] == ["custom_time"]
 
 
 def test_geometry_edit_dialog_hides_irrelevant_rows_and_preserves_switched_values(qtbot) -> None:
@@ -1683,6 +1759,39 @@ def test_source_edit_dialog_hides_irrelevant_rows_and_preserves_switched_values(
     dialog.kind_input.setCurrentText("gaussian")
     _assert_form_row_visible(dialog.form, dialog.df)
     assert dialog.df.text() == "0.08"
+
+
+def test_source_edit_dialog_round_trips_custom_checkbox_and_sections(qtbot) -> None:
+    store = ProjectStore()
+    dialog = SourceEditDialog(
+        store,
+        SourceItem(
+            name="custom_src",
+            kind="custom",
+            component="Ez",
+            props={
+                "src_func": "t",
+                "amp_func": "",
+                "is_integrated": True,
+            },
+        ),
+    )
+    qtbot.addWidget(dialog)
+    dialog.show()
+
+    assert not dialog.spatial_header.isHidden()
+    assert not dialog.temporal_header.isHidden()
+    _assert_form_row_visible(dialog.form, dialog.amplitude)
+    _assert_form_row_visible(dialog.form, dialog.src_func)
+    _assert_form_row_visible(dialog.form, dialog.is_integrated)
+    assert dialog.is_integrated.isChecked() is True
+
+    dialog.amp_func.setText("x - y")
+    qtbot.mouseClick(dialog.save_button, QtCore.Qt.LeftButton)
+
+    assert dialog.result is not None
+    assert dialog.result.props["is_integrated"] is True
+    assert dialog.result.props["amp_func"] == "x - y"
 
 
 def test_source_edit_dialog_edits_gaussian_beam_on_flag_and_complex_e0(qtbot) -> None:

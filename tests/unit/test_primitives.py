@@ -25,7 +25,7 @@ from meep_gui.scene import compile_project_scene, scene_to_flux_specs, scene_to_
 
 def test_primitive_registries_cover_current_builtin_kinds() -> None:
     assert tuple(GEOMETRY_REGISTRY) == ("circle", "block")
-    assert tuple(SOURCE_REGISTRY) == ("continuous", "gaussian", "gaussian_beam")
+    assert tuple(SOURCE_REGISTRY) == ("continuous", "gaussian", "custom", "gaussian_beam")
     assert tuple(MATERIAL_REGISTRY) == ("constant",)
     assert tuple(MONITOR_REGISTRY) == ("flux",)
     assert DEFAULT_MATERIAL_KIND == "constant"
@@ -147,3 +147,102 @@ def test_gaussian_beam_resolves_disabled_temporal_source_and_filters_runtime_sou
     assert params.sources[0].beam_w0 == 0.8
     assert abs(params.sources[0].beam_e0_z.real - 2**0.5) < 1e-9
     assert abs(params.sources[0].beam_e0_z.imag - 2**0.5) < 1e-9
+
+
+def test_custom_source_compiles_runtime_functions_and_optional_amp_func() -> None:
+    state = ProjectState(
+        parameters=[Parameter(name="scale", expr="2")],
+        sources=[
+            SourceItem(
+                name="custom_src",
+                kind="custom",
+                component="Ez",
+                props={
+                    "center_x": "0",
+                    "center_y": "1",
+                    "size_x": "2",
+                    "size_y": "0",
+                    "amplitude": "scale * (1 + 1j)",
+                    "amp_func": "x - 1j*y",
+                    "src_func": "exp(-t*t) * (1 + 1j)",
+                    "start_time": "-5",
+                    "end_time": "6",
+                    "is_integrated": True,
+                    "center_frequency": "0.25",
+                    "fwidth": "0.05",
+                },
+            )
+        ],
+    )
+
+    compiled = compile_project_scene(state)
+    params = scene_to_sim_params(compiled.scene, compiled.context)
+
+    assert compiled.scene.sources[0].source_time_kind == "custom"
+    assert params.sources[0].kind == "custom"
+    assert params.sources[0].source_time_kind == "custom"
+    assert params.sources[0].source_time is not None
+    assert params.sources[0].source_time.is_integrated is True
+    assert params.sources[0].source_time.center_frequency == 0.25
+    assert params.sources[0].source_time.fwidth == 0.05
+    assert params.sources[0].amplitude == complex(2, 2)
+    assert params.sources[0].amp_func is not None
+    assert abs(params.sources[0].amp_func(3, 4).real - 3) < 1e-9
+    assert abs(params.sources[0].amp_func(3, 4).imag + 4) < 1e-9
+    assert params.sources[0].source_time.src_func is not None
+    assert abs(params.sources[0].source_time.src_func(0).real - 1) < 1e-9
+    assert abs(params.sources[0].source_time.src_func(0).imag - 1) < 1e-9
+
+
+def test_custom_source_allows_blank_amp_func() -> None:
+    state = ProjectState(
+        sources=[
+            SourceItem(
+                name="custom_src",
+                kind="custom",
+                component="Ez",
+                props={"src_func": "1", "amp_func": ""},
+            )
+        ],
+    )
+
+    compiled = compile_project_scene(state)
+    params = scene_to_sim_params(compiled.scene, compiled.context)
+
+    assert params.sources[0].amp_func is None
+
+
+def test_gaussian_beam_resolves_custom_temporal_source() -> None:
+    state = ProjectState(
+        parameters=[Parameter(name="phase", expr="2")],
+        sources=[
+            SourceItem(
+                name="custom_time",
+                kind="custom",
+                component="Ez",
+                props={
+                    "src_func": "t + phase*1j",
+                    "center_frequency": "0.3",
+                    "fwidth": "0.07",
+                },
+                enabled=False,
+            ),
+            SourceItem(
+                name="beam",
+                kind="gaussian_beam",
+                component="Ez",
+                props={"src": "custom_time"},
+            ),
+        ],
+    )
+
+    compiled = compile_project_scene(state)
+    params = scene_to_sim_params(compiled.scene, compiled.context)
+
+    assert compiled.scene.sources[1].source_time_kind == "custom"
+    assert len(params.sources) == 1
+    assert params.sources[0].kind == "gaussian_beam"
+    assert params.sources[0].source_time_kind == "custom"
+    assert params.sources[0].source_time is not None
+    assert abs(params.sources[0].source_time.src_func(1).real - 1) < 1e-9
+    assert abs(params.sources[0].source_time.src_func(1).imag - 2) < 1e-9

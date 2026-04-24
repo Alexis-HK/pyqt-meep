@@ -567,7 +567,7 @@ def test_frequency_domain_run_uses_force_complex_fields_and_emits_png_and_csv(mo
     assert result.artifacts[1].path
     assert result.artifacts[2].path
     assert result.plots == []
-    assert build_calls == [True]
+    assert build_calls == [True, False]
     assert logs[0].startswith("Warning: no sources are configured")
     assert sim.calls[0] == "init_sim"
     assert sim.calls[1] == ("solve_cw", 1e-08, 10000, 10)

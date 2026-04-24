@@ -6,6 +6,7 @@ import re
 from .errors import ValidationResult
 
 _NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+RESERVED_PARAMETER_NAMES = frozenset({"x", "y", "t"})
 
 
 @dataclass(frozen=True)
@@ -38,7 +39,13 @@ class NameRegistry:
         return name not in self.all_names
 
 
-def validate_name(name: str, registry: NameRegistry, exclude: str | None = None) -> ValidationResult:
+def validate_name(
+    name: str,
+    registry: NameRegistry,
+    exclude: str | None = None,
+    *,
+    reserved_names: set[str] | frozenset[str] = frozenset(),
+) -> ValidationResult:
     if not name:
         return ValidationResult(False, "Name is required.")
     if not _NAME_RE.match(name):
@@ -46,6 +53,25 @@ def validate_name(name: str, registry: NameRegistry, exclude: str | None = None)
             False,
             "Name must start with a letter or underscore and use only letters, digits, or underscores.",
         )
+    if name in reserved_names:
+        reserved = ", ".join(sorted(reserved_names))
+        return ValidationResult(
+            False,
+            f"Name '{name}' is reserved. Reserved names: {reserved}.",
+        )
     if not registry.is_unique(name, exclude=exclude):
         return ValidationResult(False, f"Name '{name}' is already in use.")
     return ValidationResult(True, "")
+
+
+def validate_parameter_name(
+    name: str,
+    registry: NameRegistry,
+    exclude: str | None = None,
+) -> ValidationResult:
+    return validate_name(
+        name,
+        registry,
+        exclude=exclude,
+        reserved_names=RESERVED_PARAMETER_NAMES,
+    )

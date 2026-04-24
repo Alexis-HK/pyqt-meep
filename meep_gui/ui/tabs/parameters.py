@@ -7,7 +7,7 @@ from ...store import ProjectStore
 from ...validation import (
     NameRegistry,
     parse_parameter_import_text,
-    validate_name,
+    validate_parameter_name,
     validate_numeric_expression,
 )
 from ..common import _log_error, _set_invalid
@@ -68,7 +68,7 @@ class ParametersTab(QtWidgets.QWidget):
         exclude = None
         if 0 <= row < len(self.store.state.parameters):
             exclude = self.store.state.parameters[row].name
-        name_result = validate_name(name, registry, exclude=exclude)
+        name_result = validate_parameter_name(name, registry, exclude=exclude)
         _set_invalid(self.name_input, not name_result.ok)
         if not name_result.ok:
             _log_error(self.store, name_result.message, self)

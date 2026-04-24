@@ -7,7 +7,8 @@ MediumKind = Literal["constant", "lossy_narrowband", "dispersive", "nonlinear", 
 GeometryKind = Literal["block", "circle", "polygon", "imported_polygon"]
 SpatialMaterialKind = Literal["uniform", "function", "grid"]
 EvolutionKind = Literal["static", "translate", "rotate", "keyframed", "scripted"]
-SourceKind = Literal["continuous", "gaussian", "gaussian_beam"]
+SourceKind = Literal["continuous", "gaussian", "custom", "gaussian_beam"]
+SourceTimeKind = Literal["continuous", "gaussian", "custom"]
 MonitorKind = Literal["flux"]
 
 
@@ -101,11 +102,11 @@ class SourceSpec:
     center_y_expr: str
     size_x_expr: str
     size_y_expr: str
-    frequency_expr: str
-    bandwidth_expr: str = "0"
     enabled: bool = True
-    source_time_kind: str = ""
     source_time_ref: str = ""
+    amplitude_expr: str = "1"
+    amp_func_expr: str = ""
+    source_time: "SourceTimeSpec" | None = None
     beam_x0_x_expr: str = "0"
     beam_x0_y_expr: str = "0"
     beam_kdir_x_expr: str = "0"
@@ -114,6 +115,37 @@ class SourceSpec:
     beam_e0_x_expr: str = "0"
     beam_e0_y_expr: str = "0"
     beam_e0_z_expr: str = "1"
+
+    @property
+    def frequency_expr(self) -> str:
+        if self.source_time is None:
+            return "0"
+        return self.source_time.frequency_expr
+
+    @property
+    def bandwidth_expr(self) -> str:
+        if self.source_time is None:
+            return "0"
+        return self.source_time.bandwidth_expr
+
+    @property
+    def source_time_kind(self) -> str:
+        if self.source_time is None:
+            return ""
+        return self.source_time.kind
+
+
+@dataclass(frozen=True)
+class SourceTimeSpec:
+    kind: SourceTimeKind
+    frequency_expr: str = "0"
+    bandwidth_expr: str = "0"
+    src_func_expr: str = ""
+    start_time_expr: str = "-1e20"
+    end_time_expr: str = "1e20"
+    is_integrated: bool = False
+    center_frequency_expr: str = "0"
+    fwidth_expr: str = "0"
 
 
 @dataclass(frozen=True)

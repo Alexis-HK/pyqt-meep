@@ -42,6 +42,7 @@ class HarminvRecipe(BaseRecipe):
     ) -> dict[SceneFeature, SupportStatus]:
         return {
             SceneFeature.CONTINUOUS_SOURCES: SupportStatus.FORBIDDEN,
+            SceneFeature.CUSTOM_TEMPORAL_SOURCES: SupportStatus.FORBIDDEN,
         }
 
     def validate(
@@ -52,6 +53,18 @@ class HarminvRecipe(BaseRecipe):
         target: AnalysisTarget,
     ) -> tuple[ValidationIssue, ...]:
         features = extract_scene_features(scene=plan.scene, transmission=plan.transmission)
+        if SceneFeature.CUSTOM_TEMPORAL_SOURCES in features:
+            return (
+                ValidationIssue(
+                    severity="error",
+                    message=(
+                        "Harminv requires Gaussian (pulsed) sources. "
+                        "Custom temporal sources are not supported."
+                    ),
+                    code="harminv:custom_source",
+                    feature=SceneFeature.CUSTOM_TEMPORAL_SOURCES.value,
+                ),
+            )
         if SceneFeature.CONTINUOUS_SOURCES in features:
             return (
                 ValidationIssue(

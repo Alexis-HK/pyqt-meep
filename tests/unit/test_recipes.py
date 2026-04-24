@@ -60,6 +60,27 @@ def test_prepare_runtime_analysis_reports_forbidden_feature() -> None:
     assert "Gaussian (pulsed) sources" in prepared.validation.errors[0].message
 
 
+def test_prepare_runtime_analysis_reports_custom_temporal_source_forbidden_feature() -> None:
+    state = ProjectState(
+        analysis=AnalysisConfig(kind="frequency_domain_solver"),
+        sources=[
+            SourceItem(
+                name="custom_src",
+                kind="custom",
+                component="Ez",
+                props={"src_func": "t"},
+            )
+        ],
+    )
+
+    prepared = prepare_runtime_analysis(state)
+
+    assert prepared.validation.ok is False
+    assert [item.message for item in prepared.validation.errors] == [
+        "Frequency-domain solver supports only continuous sources. Custom temporal sources are not supported."
+    ]
+
+
 def test_recipe_specific_error_message_wins_over_generic_capability_message() -> None:
     state = ProjectState(
         analysis=AnalysisConfig(kind="harminv"),
@@ -77,6 +98,26 @@ def test_recipe_specific_error_message_wins_over_generic_capability_message() ->
 
     assert [item.message for item in prepared.validation.errors] == [
         "Harminv requires Gaussian (pulsed) sources. Continuous sources are not supported."
+    ]
+
+
+def test_harminv_rejects_custom_temporal_sources_with_specific_message() -> None:
+    state = ProjectState(
+        analysis=AnalysisConfig(kind="harminv"),
+        sources=[
+            SourceItem(
+                name="custom_src",
+                kind="custom",
+                component="Ez",
+                props={"src_func": "t"},
+            )
+        ],
+    )
+
+    prepared = prepare_runtime_analysis(state)
+
+    assert [item.message for item in prepared.validation.errors] == [
+        "Harminv requires Gaussian (pulsed) sources. Custom temporal sources are not supported."
     ]
 
 
@@ -108,6 +149,26 @@ def test_prepare_runtime_analysis_reports_ignored_features_for_mpb() -> None:
     assert any("Flux monitors are ignored by this analysis." == msg for msg in messages)
     assert any("Domain symmetries are ignored by this analysis." == msg for msg in messages)
     assert any("Cylindrical coordinates are ignored by this analysis." == msg for msg in messages)
+
+
+def test_prepare_runtime_analysis_reports_custom_sources_ignored_for_mpb() -> None:
+    state = ProjectState(
+        analysis=AnalysisConfig(kind="mpb_modesolver"),
+        sources=[
+            SourceItem(
+                name="custom_src",
+                kind="custom",
+                component="Ez",
+                props={"src_func": "t"},
+            )
+        ],
+    )
+
+    prepared = prepare_runtime_analysis(state)
+
+    assert "Custom temporal sources are ignored by this analysis." in prepared.validation.messages(
+        "warning"
+    )
 
 
 def test_generate_script_logs_capability_warnings_for_mpb() -> None:
@@ -201,3 +262,30 @@ def test_gaussian_beam_inherits_temporal_source_capability() -> None:
     prepared = prepare_runtime_analysis(state)
 
     assert prepared.validation.ok
+
+
+def test_gaussian_beam_inherits_custom_temporal_source_capability() -> None:
+    state = ProjectState(
+        analysis=AnalysisConfig(kind="frequency_domain_solver"),
+        sources=[
+            SourceItem(
+                name="custom_time",
+                kind="custom",
+                component="Ez",
+                props={"src_func": "t"},
+                enabled=False,
+            ),
+            SourceItem(
+                name="beam",
+                kind="gaussian_beam",
+                component="Ez",
+                props={"src": "custom_time"},
+            ),
+        ],
+    )
+
+    prepared = prepare_runtime_analysis(state)
+
+    assert [item.message for item in prepared.validation.errors] == [
+        "Frequency-domain solver supports only continuous sources. Custom temporal sources are not supported."
+    ]

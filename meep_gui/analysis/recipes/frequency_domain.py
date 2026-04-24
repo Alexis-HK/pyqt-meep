@@ -42,6 +42,7 @@ class FrequencyDomainSolverRecipe(BaseRecipe):
     ) -> dict[SceneFeature, SupportStatus]:
         return {
             SceneFeature.GAUSSIAN_SOURCES: SupportStatus.FORBIDDEN,
+            SceneFeature.CUSTOM_TEMPORAL_SOURCES: SupportStatus.FORBIDDEN,
             SceneFeature.FLUX_MONITORS: SupportStatus.IGNORED,
         }
 
@@ -53,6 +54,18 @@ class FrequencyDomainSolverRecipe(BaseRecipe):
         target: AnalysisTarget,
     ) -> tuple[ValidationIssue, ...]:
         features = extract_scene_features(scene=plan.scene, transmission=plan.transmission)
+        if SceneFeature.CUSTOM_TEMPORAL_SOURCES in features:
+            return (
+                ValidationIssue(
+                    severity="error",
+                    message=(
+                        "Frequency-domain solver supports only continuous sources. "
+                        "Custom temporal sources are not supported."
+                    ),
+                    code="frequency_domain:custom_source",
+                    feature=SceneFeature.CUSTOM_TEMPORAL_SOURCES.value,
+                ),
+            )
         if SceneFeature.GAUSSIAN_SOURCES in features:
             return (
                 ValidationIssue(

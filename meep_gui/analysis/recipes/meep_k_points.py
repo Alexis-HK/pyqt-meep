@@ -42,6 +42,7 @@ class MeepKPointsRecipe(BaseRecipe):
     ) -> dict[SceneFeature, SupportStatus]:
         return {
             SceneFeature.CONTINUOUS_SOURCES: SupportStatus.FORBIDDEN,
+            SceneFeature.CUSTOM_TEMPORAL_SOURCES: SupportStatus.FORBIDDEN,
             SceneFeature.FLUX_MONITORS: SupportStatus.IGNORED,
         }
 
@@ -54,6 +55,18 @@ class MeepKPointsRecipe(BaseRecipe):
     ) -> tuple[ValidationIssue, ...]:
         issues: list[ValidationIssue] = []
         features = extract_scene_features(scene=plan.scene, transmission=plan.transmission)
+        if SceneFeature.CUSTOM_TEMPORAL_SOURCES in features:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    message=(
+                        "Meep k points requires Gaussian (pulsed) sources. "
+                        "Custom temporal sources are not supported."
+                    ),
+                    code="meep_k_points:custom_source",
+                    feature=SceneFeature.CUSTOM_TEMPORAL_SOURCES.value,
+                )
+            )
         if SceneFeature.CONTINUOUS_SOURCES in features:
             issues.append(
                 ValidationIssue(
@@ -66,7 +79,10 @@ class MeepKPointsRecipe(BaseRecipe):
                     feature=SceneFeature.CONTINUOUS_SOURCES.value,
                 )
             )
-        elif SceneFeature.GAUSSIAN_SOURCES not in features:
+        elif (
+            SceneFeature.GAUSSIAN_SOURCES not in features
+            and SceneFeature.CUSTOM_TEMPORAL_SOURCES not in features
+        ):
             issues.append(
                 ValidationIssue(
                     severity="error",
