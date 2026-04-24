@@ -1656,8 +1656,8 @@ def test_sources_tab_shows_chirped_pulse_sections_and_preserves_values(qtbot) ->
 
     tab.kind_input.setCurrentText("chirped_pulse")
 
-    assert not tab.spatial_header.isHidden()
-    assert not tab.temporal_header.isHidden()
+    assert tab.spatial_header.isHidden()
+    assert tab.temporal_header.isHidden()
     _assert_form_row_visible(tab.form, tab.component_input)
     _assert_form_row_visible(tab.form, tab.center_x)
     _assert_form_row_visible(tab.form, tab.size_y)
@@ -1857,8 +1857,8 @@ def test_source_edit_dialog_round_trips_chirped_pulse_fields(qtbot) -> None:
     qtbot.addWidget(dialog)
     dialog.show()
 
-    assert not dialog.spatial_header.isHidden()
-    assert not dialog.temporal_header.isHidden()
+    assert dialog.spatial_header.isHidden()
+    assert dialog.temporal_header.isHidden()
     _assert_form_row_visible(dialog.form, dialog.v0)
     _assert_form_row_visible(dialog.form, dialog.a)
     _assert_form_row_visible(dialog.form, dialog.b)

@@ -184,8 +184,8 @@ class SourceEditDialog(QtWidgets.QDialog):
         for field_id, widget in self._prop_widgets.items():
             _set_form_row_visible(self.form, widget, field_id in visible_fields)
         _set_form_row_visible(self.form, self.component_input, kind != "gaussian_beam")
-        spatial_visible = any(field.section == "spatial" for field in fields)
-        temporal_visible = any(field.section == "temporal" for field in fields)
+        spatial_visible = kind == "custom" and any(field.section == "spatial" for field in fields)
+        temporal_visible = kind == "custom" and any(field.section == "temporal" for field in fields)
         self.spatial_header.setVisible(spatial_visible)
         self.temporal_header.setVisible(temporal_visible)
 
