@@ -6,7 +6,7 @@ from ...model import FluxMonitorConfig
 from ...primitives import DEFAULT_MONITOR_KIND, monitor_kind
 from ...store import ProjectStore
 from ...validation import validate_name, validate_numeric_expression
-from ..common import _log_error, _set_invalid
+from ..common import _log_error, _scroll_area_for, _set_invalid
 from ..dialogs import FluxMonitorEditDialog
 from ..scope import active_scope, parameter_names
 
@@ -36,10 +36,12 @@ class FluxMonitorsTab(QtWidgets.QWidget):
             "nfreq": self.nfreq,
         }
 
-        form = QtWidgets.QFormLayout()
+        self.form_container = QtWidgets.QWidget()
+        form = QtWidgets.QFormLayout(self.form_container)
         form.addRow("Name", self.name_input)
         for field in self._monitor_spec.fields:
             form.addRow(field.label, self._field_widgets[field.field_id])
+        self.form_scroll = _scroll_area_for(self.form_container)
 
         self.add_button = QtWidgets.QPushButton("Add")
         self.update_button = QtWidgets.QPushButton("Update")
@@ -58,7 +60,7 @@ class FluxMonitorsTab(QtWidgets.QWidget):
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
 
         layout = QtWidgets.QVBoxLayout(self)
-        layout.addLayout(form)
+        layout.addWidget(self.form_scroll, stretch=1)
         layout.addLayout(btn_row)
         layout.addWidget(self.table)
 

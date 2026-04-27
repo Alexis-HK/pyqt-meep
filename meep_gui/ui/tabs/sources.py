@@ -12,7 +12,14 @@ from ...validation import (
     validate_name,
     validate_numeric_expression,
 )
-from ..common import _log_error, _mark_row_warning, _set_form_row_visible, _set_invalid
+from ..common import (
+    _log_error,
+    _mark_row_warning,
+    _refresh_scroll_area,
+    _scroll_area_for,
+    _set_form_row_visible,
+    _set_invalid,
+)
 from ..dialogs import SourceEditDialog
 from ..scope import active_scope, parameter_names
 
@@ -45,6 +52,7 @@ class SourcesTab(QtWidgets.QWidget):
         super().__init__()
         self.store = store
         self._invalid_items: set[str] = set()
+        self._preserve_source_ref_on_sync = False
 
         self.name_input = QtWidgets.QLineEdit()
         self.enabled_input = QtWidgets.QCheckBox()
@@ -154,7 +162,8 @@ class SourcesTab(QtWidgets.QWidget):
             "eig_vol_center_y": self.eig_vol_center_y,
         }
 
-        self.form = QtWidgets.QFormLayout()
+        self.form_container = QtWidgets.QWidget()
+        self.form = QtWidgets.QFormLayout(self.form_container)
         self.form.addRow("Name", self.name_input)
         self.form.addRow("ON", self.enabled_input)
         self.form.addRow("Type", self.kind_input)
@@ -206,6 +215,7 @@ class SourcesTab(QtWidgets.QWidget):
         self.form.addRow("eig_vol Size Y", self.eig_vol_size_y)
         self.form.addRow("eig_vol Center X", self.eig_vol_center_x)
         self.form.addRow("eig_vol Center Y", self.eig_vol_center_y)
+        self.form_scroll = _scroll_area_for(self.form_container)
 
         self.add_button = QtWidgets.QPushButton("Add")
         self.update_button = QtWidgets.QPushButton("Update")
@@ -223,7 +233,7 @@ class SourcesTab(QtWidgets.QWidget):
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
 
         layout = QtWidgets.QVBoxLayout(self)
-        layout.addLayout(self.form)
+        layout.addWidget(self.form_scroll, stretch=1)
         layout.addLayout(btn_row)
         layout.addWidget(self.table)
 
@@ -264,8 +274,13 @@ class SourcesTab(QtWidgets.QWidget):
             widget.setText("" if value is None else str(value))
 
     def _sync_kind_fields(self, kind: str) -> None:
+        current_source_ref = str(self._field_value("src"))
+        if _source_ref_allows_blank(kind) and self.src_name.isHidden():
+            if not self._preserve_source_ref_on_sync:
+                current_source_ref = ""
+        self._preserve_source_ref_on_sync = False
         self._refresh_source_ref_choices(
-            str(self._field_value("src")),
+            current_source_ref,
             allow_blank=_source_ref_allows_blank(kind),
         )
         fields = source_kind(kind).fields
@@ -293,6 +308,7 @@ class SourcesTab(QtWidgets.QWidget):
         temporal_visible = kind == "custom" and any(field.section == "temporal" for field in fields)
         self.spatial_header.setVisible(spatial_visible)
         self.temporal_header.setVisible(temporal_visible)
+        _refresh_scroll_area(self.form_scroll)
 
     def _source_ref_names(self, exclude: str = "") -> list[str]:
         return [
@@ -471,6 +487,7 @@ class SourcesTab(QtWidgets.QWidget):
         )
         for field_id in self._prop_widgets:
             self._set_field_value(field_id, item.props.get(field_id, ""))
+        self._preserve_source_ref_on_sync = True
         self._sync_kind_fields(item.kind)
         _set_invalid(self.name_input, False)
 

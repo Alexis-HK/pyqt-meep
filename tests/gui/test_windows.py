@@ -781,6 +781,26 @@ def test_mpb_panel_updates_polarization_and_field_kpoints(qtbot) -> None:
     assert "Force all mode images" not in checkbox_texts
 
 
+def test_analysis_tab_scrolls_mpb_panel_when_vertically_constrained(qtbot) -> None:
+    store = ProjectStore()
+    store.state.analysis = AnalysisConfig(kind="mpb_modesolver")
+    tab = AnalysisTab(store)
+    qtbot.addWidget(tab)
+    tab.resize(720, 220)
+    tab.show()
+
+    QtWidgets.QApplication.processEvents()
+    qtbot.waitUntil(
+        lambda: tab.stack_scroll.verticalScrollBar().maximum() > 0,
+        timeout=3000,
+    )
+
+    assert tab.run_button.isVisible()
+    assert tab.stop_button.isVisible()
+    assert tab.run_button.height() >= tab.run_button.minimumSizeHint().height()
+    assert tab.mpb_panel.lattice_x.height() >= tab.mpb_panel.lattice_x.minimumSizeHint().height()
+
+
 def test_meep_k_points_panel_updates_config_and_points(qtbot) -> None:
     store = ProjectStore()
     panel = MeepKPointsPanel(store)
@@ -1794,6 +1814,40 @@ def test_sources_tab_adds_eigenmode_source_with_dropdown_fields(qtbot) -> None:
     assert store.state.sources[1].props["eig_parity"] == "EVEN_Y+ODD_Z"
     assert store.state.sources[1].props["eig_lattice_size_x"] == "4"
     assert store.state.sources[1].props["eig_lattice_size_y"] == "5"
+
+
+def test_sources_tab_scrolls_eigenmode_form_when_vertically_constrained(qtbot) -> None:
+    store = ProjectStore()
+    store.state.sources.append(
+        SourceItem(
+            name="pulse",
+            kind="gaussian",
+            component="Ez",
+            props={"fcen": "0.2", "df": "0.1"},
+            enabled=False,
+        )
+    )
+    tab = SourcesTab(store)
+    qtbot.addWidget(tab)
+    tab.resize(720, 260)
+    tab.show()
+
+    tab.kind_input.setCurrentText("eigenmode")
+    QtWidgets.QApplication.processEvents()
+    bar = tab.form_scroll.verticalScrollBar()
+    qtbot.waitUntil(lambda: bar.maximum() > 0, timeout=3000)
+
+    assert tab.add_button.isVisible()
+    assert tab.update_button.isVisible()
+    assert tab.remove_button.isVisible()
+    assert tab.add_button.height() >= tab.add_button.minimumSizeHint().height()
+    assert tab.eig_vol_center_y.height() >= tab.eig_vol_center_y.minimumSizeHint().height()
+
+    bar.setValue(bar.maximum())
+    QtWidgets.QApplication.processEvents()
+    field_pos = tab.eig_vol_center_y.mapTo(tab.form_scroll.viewport(), QtCore.QPoint(0, 0))
+    field_rect = QtCore.QRect(field_pos, tab.eig_vol_center_y.size())
+    assert tab.form_scroll.viewport().rect().intersects(field_rect)
 
 
 def test_sources_tab_accepts_eigenmode_enum_values(qtbot) -> None:

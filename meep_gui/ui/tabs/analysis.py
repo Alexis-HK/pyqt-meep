@@ -10,7 +10,7 @@ from ...analysis import (
 )
 from ...model import AnalysisConfig
 from ...store import ProjectStore
-from ..common import _log_error
+from ..common import _log_error, _refresh_scroll_area, _scroll_area_for
 from ..panels import (
     FieldAnimationPanel,
     FrequencyDomainPanel,
@@ -52,6 +52,7 @@ class AnalysisTab(QtWidgets.QWidget):
         self.stack.addWidget(self.frequency_domain_panel)
         self.stack.addWidget(self.mpb_panel)
         self.stack.addWidget(self.meep_k_points_panel)
+        self.stack_scroll = _scroll_area_for(self.stack)
 
         self.run_button = QtWidgets.QPushButton("Run")
         self.stop_button = QtWidgets.QPushButton("Stop")
@@ -67,9 +68,8 @@ class AnalysisTab(QtWidgets.QWidget):
         layout = QtWidgets.QVBoxLayout(self)
         layout.addWidget(self.kind_label)
         layout.addWidget(self.kind)
-        layout.addWidget(self.stack)
+        layout.addWidget(self.stack_scroll, stretch=1)
         layout.addLayout(btn_row)
-        layout.addStretch(1)
 
         self.kind.currentTextChanged.connect(self._on_kind_changed)
         self.run_button.clicked.connect(self._on_run)
@@ -176,6 +176,7 @@ class AnalysisTab(QtWidgets.QWidget):
             self.kind.setCurrentIndex(idx)
             self.kind.blockSignals(False)
             self.stack.setCurrentIndex(idx)
+            _refresh_scroll_area(self.stack_scroll)
         self.field_panel.load_from_config(self.store.state.analysis.field_animation)
         self.harminv_panel.load_from_config(self.store.state.analysis.harminv)
         self.transmission_panel.load_from_config(
@@ -186,3 +187,4 @@ class AnalysisTab(QtWidgets.QWidget):
         )
         self.mpb_panel.load_from_config(self.store.state.analysis.mpb_modesolver)
         self.meep_k_points_panel.load_from_config(self.store.state.analysis.meep_k_points)
+        _refresh_scroll_area(self.stack_scroll)

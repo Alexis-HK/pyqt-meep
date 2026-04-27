@@ -5,7 +5,7 @@ from PyQt5 import QtWidgets
 from ...model import SweepConfig, SweepParameter
 from ...store import ProjectStore
 from ...validation import validate_numeric_expression
-from ..common import _log_error, _set_invalid
+from ..common import _log_error, _scroll_area_for, _set_invalid
 from ..dialogs import SweepEditDialog
 from ..scope import parameter_names
 
@@ -32,6 +32,13 @@ class SweepTab(QtWidgets.QWidget):
         param_form.addRow("Stop", self.stop)
         param_form.addRow("Step Size", self.steps)
 
+        self.form_container = QtWidgets.QWidget()
+        form_layout = QtWidgets.QVBoxLayout(self.form_container)
+        form_layout.addLayout(settings_form)
+        form_layout.addWidget(QtWidgets.QLabel("Sweep Parameters"))
+        form_layout.addLayout(param_form)
+        self.form_scroll = _scroll_area_for(self.form_container)
+
         self.add_button = QtWidgets.QPushButton("Add")
         self.update_button = QtWidgets.QPushButton("Update")
         self.remove_button = QtWidgets.QPushButton("Remove")
@@ -49,12 +56,9 @@ class SweepTab(QtWidgets.QWidget):
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
 
         layout = QtWidgets.QVBoxLayout(self)
-        layout.addLayout(settings_form)
-        layout.addWidget(QtWidgets.QLabel("Sweep Parameters"))
-        layout.addLayout(param_form)
+        layout.addWidget(self.form_scroll, stretch=1)
         layout.addLayout(btn_row)
         layout.addWidget(self.table)
-        layout.addStretch(1)
 
         self.enabled.toggled.connect(self._apply_enabled)
         self.add_button.clicked.connect(self._on_add)

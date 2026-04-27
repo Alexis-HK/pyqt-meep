@@ -6,7 +6,14 @@ from ...model import GeometryItem
 from ...primitives import GEOMETRY_REGISTRY, geometry_kind
 from ...store import ProjectStore
 from ...validation import validate_name, validate_numeric_expression
-from ..common import _log_error, _mark_row_warning, _set_form_row_visible, _set_invalid
+from ..common import (
+    _log_error,
+    _mark_row_warning,
+    _refresh_scroll_area,
+    _scroll_area_for,
+    _set_form_row_visible,
+    _set_invalid,
+)
 from ..dialogs import GeometryEditDialog
 from ..scope import active_scope, parameter_names
 
@@ -34,7 +41,8 @@ class GeometryTab(QtWidgets.QWidget):
             "radius": self.radius,
         }
 
-        self.form = QtWidgets.QFormLayout()
+        self.form_container = QtWidgets.QWidget()
+        self.form = QtWidgets.QFormLayout(self.form_container)
         self.form.addRow("Name", self.name_input)
         self.form.addRow("Type", self.kind_input)
         self.form.addRow("Material", self.material_input)
@@ -43,6 +51,7 @@ class GeometryTab(QtWidgets.QWidget):
         self.form.addRow("Size X", self.size_x)
         self.form.addRow("Size Y", self.size_y)
         self.form.addRow("Radius", self.radius)
+        self.form_scroll = _scroll_area_for(self.form_container)
 
         self.add_button = QtWidgets.QPushButton("Add")
         self.update_button = QtWidgets.QPushButton("Update")
@@ -60,7 +69,7 @@ class GeometryTab(QtWidgets.QWidget):
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
 
         layout = QtWidgets.QVBoxLayout(self)
-        layout.addLayout(self.form)
+        layout.addWidget(self.form_scroll, stretch=1)
         layout.addLayout(btn_row)
         layout.addWidget(self.table)
 
@@ -84,6 +93,7 @@ class GeometryTab(QtWidgets.QWidget):
         visible_fields = {field.field_id for field in geometry_kind(kind).fields}
         for field_id, widget in self._prop_widgets.items():
             _set_form_row_visible(self.form, widget, field_id in visible_fields)
+        _refresh_scroll_area(self.form_scroll)
 
     def _validate(self, name: str, kind: str, material: str, row: int) -> bool:
         scope = active_scope(self.store)

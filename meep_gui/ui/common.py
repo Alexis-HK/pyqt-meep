@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PyQt5 import QtGui, QtWidgets
+from PyQt5 import QtCore, QtGui, QtWidgets
 
 from ..model import RunRecord
 from ..store import ProjectStore
@@ -27,6 +27,31 @@ def _set_form_row_visible(
     if label is not None:
         label.setVisible(visible)
     field.setVisible(visible)
+
+
+def _scroll_area_for(content: QtWidgets.QWidget) -> QtWidgets.QScrollArea:
+    layout = content.layout()
+    if layout is not None:
+        layout.setSizeConstraint(QtWidgets.QLayout.SetMinimumSize)
+    content.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
+
+    scroll_area = QtWidgets.QScrollArea()
+    scroll_area.setFrameShape(QtWidgets.QFrame.NoFrame)
+    scroll_area.setWidgetResizable(True)
+    scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+    scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+    scroll_area.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+    scroll_area.setWidget(content)
+    return scroll_area
+
+
+def _refresh_scroll_area(scroll_area: QtWidgets.QScrollArea) -> None:
+    content = scroll_area.widget()
+    if content is not None:
+        content.updateGeometry()
+        content.adjustSize()
+    scroll_area.updateGeometry()
+    scroll_area.viewport().update()
 
 
 def format_run_list_label(run: RunRecord) -> str:
