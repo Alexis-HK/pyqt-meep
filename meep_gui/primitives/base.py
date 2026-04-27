@@ -19,6 +19,7 @@ class PrimitiveField:
     required: bool = True
     allowed_locals: tuple[str, ...] = ()
     section: str = ""
+    choices: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

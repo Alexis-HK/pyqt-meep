@@ -33,6 +33,7 @@ def test_primitive_registries_cover_current_builtin_kinds() -> None:
         "custom",
         "chirped_pulse",
         "gaussian_beam",
+        "eigenmode",
     )
     assert tuple(MATERIAL_REGISTRY) == ("constant",)
     assert tuple(MONITOR_REGISTRY) == ("flux",)
@@ -220,6 +221,40 @@ def test_custom_source_allows_blank_amp_func() -> None:
     assert params.sources[0].amp_func is None
 
 
+def test_custom_source_can_inherit_optional_temporal_source() -> None:
+    state = ProjectState(
+        sources=[
+            SourceItem(
+                name="pulse",
+                kind="gaussian",
+                component="Ez",
+                props={"fcen": "0.2", "df": "0.1"},
+                enabled=False,
+            ),
+            SourceItem(
+                name="custom_src",
+                kind="custom",
+                component="Ez",
+                props={
+                    "src": "pulse",
+                    "src_func": "t",
+                    "center_frequency": "0.3",
+                    "fwidth": "0.07",
+                },
+            ),
+        ],
+    )
+
+    compiled = compile_project_scene(state)
+    params = scene_to_sim_params(compiled.scene, compiled.context)
+
+    assert compiled.scene.sources[1].source_time_kind == "gaussian"
+    assert params.sources[0].kind == "custom"
+    assert params.sources[0].source_time_kind == "gaussian"
+    assert params.sources[0].frequency == 0.2
+    assert params.sources[0].bandwidth == 0.1
+
+
 def test_chirped_pulse_source_compiles_runtime_callback() -> None:
     state = ProjectState(
         parameters=[Parameter(name="shift", expr="2")],
@@ -333,3 +368,74 @@ def test_gaussian_beam_resolves_chirped_pulse_source_time() -> None:
     assert params.sources[0].source_time.chirp_t0 == 4.0
     assert params.sources[0].source_time.src_func is not None
     assert abs(params.sources[0].source_time.src_func(4.0) - (1 + 0j)) < 1e-9
+
+
+def test_eigenmode_resolves_source_time_and_optional_regions() -> None:
+    state = ProjectState(
+        parameters=[Parameter(name="amp", expr="2")],
+        sources=[
+            SourceItem(
+                name="pulse",
+                kind="gaussian",
+                component="Ez",
+                props={"fcen": "0.2", "df": "0.1"},
+                enabled=False,
+            ),
+            SourceItem(
+                name="mode",
+                kind="eigenmode",
+                component="Ez",
+                props={
+                    "src": "pulse",
+                    "center_x": "1",
+                    "center_y": "2",
+                    "size_x": "0",
+                    "size_y": "4",
+                    "eig_component": "ALL_COMPONENTS",
+                    "eig_direction": "X",
+                    "eig_band": "2",
+                    "eig_kpoint_x": "0.1",
+                    "eig_kpoint_y": "0.2",
+                    "eig_kpoint_z": "0.3",
+                    "eig_match_freq": False,
+                    "eig_parity": "EVEN_Y+ODD_Z",
+                    "eig_resolution": "16",
+                    "eig_tolerance": "1e-9",
+                    "eig_lattice_size_x": "6",
+                    "eig_lattice_size_y": "7",
+                    "eig_lattice_center_x": "0.5",
+                    "eig_lattice_center_y": "-0.5",
+                    "eig_vol_size_x": "0",
+                    "eig_vol_size_y": "3",
+                    "eig_vol_center_x": "1.5",
+                    "eig_vol_center_y": "0",
+                    "amplitude": "amp * (1 + 1j)",
+                    "amp_func": "x - y*1j",
+                },
+            ),
+        ],
+    )
+
+    compiled = compile_project_scene(state)
+    params = scene_to_sim_params(compiled.scene, compiled.context)
+
+    assert compiled.scene.sources[1].source_time_kind == "gaussian"
+    assert len(params.sources) == 1
+    source = params.sources[0]
+    assert source.kind == "eigenmode"
+    assert source.component == "ALL_COMPONENTS"
+    assert source.source_time_kind == "gaussian"
+    assert source.eig_direction == "X"
+    assert source.eig_band == 2
+    assert source.eig_kpoint == (0.1, 0.2, 0.3)
+    assert source.eig_match_freq is False
+    assert source.eig_parity == "EVEN_Y+ODD_Z"
+    assert source.eig_resolution == 16
+    assert source.eig_tolerance == 1e-9
+    assert source.eig_lattice_size == (6.0, 7.0)
+    assert source.eig_lattice_center == (0.5, -0.5)
+    assert source.eig_vol_size == (0.0, 3.0)
+    assert source.eig_vol_center == (1.5, 0.0)
+    assert source.amplitude == complex(2, 2)
+    assert source.amp_func is not None
+    assert source.amp_func(3, 4) == complex(3, -4)

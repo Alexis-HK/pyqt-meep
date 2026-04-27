@@ -7,7 +7,14 @@ MediumKind = Literal["constant", "lossy_narrowband", "dispersive", "nonlinear", 
 GeometryKind = Literal["block", "circle", "polygon", "imported_polygon"]
 SpatialMaterialKind = Literal["uniform", "function", "grid"]
 EvolutionKind = Literal["static", "translate", "rotate", "keyframed", "scripted"]
-SourceKind = Literal["continuous", "gaussian", "custom", "chirped_pulse", "gaussian_beam"]
+SourceKind = Literal[
+    "continuous",
+    "gaussian",
+    "custom",
+    "chirped_pulse",
+    "gaussian_beam",
+    "eigenmode",
+]
 SourceTimeKind = Literal["continuous", "gaussian", "custom", "chirped_pulse"]
 MonitorKind = Literal["flux"]
 
@@ -115,6 +122,23 @@ class SourceSpec:
     beam_e0_x_expr: str = "0"
     beam_e0_y_expr: str = "0"
     beam_e0_z_expr: str = "1"
+    eig_lattice_size_x_expr: str = ""
+    eig_lattice_size_y_expr: str = ""
+    eig_lattice_center_x_expr: str = "0"
+    eig_lattice_center_y_expr: str = "0"
+    eig_vol_size_x_expr: str = ""
+    eig_vol_size_y_expr: str = ""
+    eig_vol_center_x_expr: str = "0"
+    eig_vol_center_y_expr: str = "0"
+    eig_direction: str = "AUTOMATIC"
+    eig_band_expr: str = "1"
+    eig_kpoint_x_expr: str = "0"
+    eig_kpoint_y_expr: str = "0"
+    eig_kpoint_z_expr: str = "0"
+    eig_match_freq: bool = True
+    eig_parity: str = "NO_PARITY"
+    eig_resolution_expr: str = "0"
+    eig_tolerance_expr: str = "1e-12"
 
     @property
     def frequency_expr(self) -> str:

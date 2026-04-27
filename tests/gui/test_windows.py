@@ -29,6 +29,7 @@ from meep_gui.model import (
     TransmissionDomainState,
     TransmissionSpectrumConfig,
 )
+from meep_gui.primitives import source_kind
 from meep_gui.script import generate_script
 from meep_gui.store import ProjectStore
 import meep_gui.preview.domain as domain_preview_module
@@ -1752,6 +1753,91 @@ def test_sources_tab_gaussian_beam_lists_disabled_chirped_pulse_source_time(qtbo
     assert [tab.src_name.itemText(i) for i in range(tab.src_name.count())] == ["chirp_time"]
 
 
+def test_sources_tab_adds_eigenmode_source_with_dropdown_fields(qtbot) -> None:
+    store = ProjectStore()
+    store.state.sources.append(
+        SourceItem(
+            name="pulse",
+            kind="gaussian",
+            component="Ez",
+            props={"fcen": "0.2", "df": "0.1"},
+            enabled=False,
+        )
+    )
+    tab = SourcesTab(store)
+    qtbot.addWidget(tab)
+    tab.show()
+
+    tab.name_input.setText("mode")
+    tab.kind_input.setCurrentText("eigenmode")
+
+    _assert_form_row_visible(tab.form, tab.src_name)
+    _assert_form_row_hidden(tab.form, tab.component_input)
+    _assert_form_row_visible(tab.form, tab.eig_component)
+    _assert_form_row_visible(tab.form, tab.eig_direction)
+    _assert_form_row_visible(tab.form, tab.eig_parity)
+    assert [tab.src_name.itemText(i) for i in range(tab.src_name.count())] == ["pulse"]
+    assert tab.eig_component.currentText() == "ALL_COMPONENTS"
+    assert tab.eig_direction.currentText() == "AUTOMATIC"
+    assert tab.eig_parity.currentText() == "NO_PARITY"
+
+    tab.eig_direction.setCurrentText("X")
+    tab.eig_parity.setCurrentText("EVEN_Y+ODD_Z")
+    tab.eig_lattice_size_x.setText("4")
+    tab.eig_lattice_size_y.setText("5")
+    qtbot.mouseClick(tab.add_button, QtCore.Qt.LeftButton)
+
+    assert len(store.state.sources) == 2
+    assert store.state.sources[1].kind == "eigenmode"
+    assert store.state.sources[1].props["src"] == "pulse"
+    assert store.state.sources[1].props["eig_direction"] == "X"
+    assert store.state.sources[1].props["eig_parity"] == "EVEN_Y+ODD_Z"
+    assert store.state.sources[1].props["eig_lattice_size_x"] == "4"
+    assert store.state.sources[1].props["eig_lattice_size_y"] == "5"
+
+
+def test_sources_tab_accepts_eigenmode_enum_values(qtbot) -> None:
+    store = ProjectStore()
+    tab = SourcesTab(store)
+    qtbot.addWidget(tab)
+
+    fields = {field.field_id: field for field in source_kind("eigenmode").fields}
+
+    assert tab._validate_field(fields["eig_component"], "ALL_COMPONENTS").ok
+    assert tab._validate_field(fields["eig_direction"], "AUTOMATIC").ok
+    assert tab._validate_field(fields["eig_direction"], "NO_DIRECTION").ok
+    assert tab._validate_field(fields["eig_parity"], "EVEN_Y+ODD_Z").ok
+
+
+def test_sources_tab_custom_source_ref_is_optional_and_hides_manual_temporal_fields(qtbot) -> None:
+    store = ProjectStore()
+    store.state.sources.append(
+        SourceItem(
+            name="pulse",
+            kind="gaussian",
+            component="Ez",
+            props={"fcen": "0.2", "df": "0.1"},
+            enabled=False,
+        )
+    )
+    tab = SourcesTab(store)
+    qtbot.addWidget(tab)
+    tab.show()
+
+    tab.kind_input.setCurrentText("custom")
+
+    assert tab.src_name.itemText(0) == ""
+    _assert_form_row_visible(tab.form, tab.src_name)
+    _assert_form_row_visible(tab.form, tab.src_func)
+
+    tab.src_name.setCurrentText("pulse")
+
+    _assert_form_row_visible(tab.form, tab.src_name)
+    _assert_form_row_hidden(tab.form, tab.src_func)
+    _assert_form_row_hidden(tab.form, tab.center_frequency)
+    _assert_form_row_visible(tab.form, tab.amplitude)
+
+
 def test_geometry_edit_dialog_hides_irrelevant_rows_and_preserves_switched_values(qtbot) -> None:
     store = ProjectStore()
     dialog = GeometryEditDialog(
@@ -1911,3 +1997,53 @@ def test_source_edit_dialog_edits_gaussian_beam_on_flag_and_complex_e0(qtbot) ->
     assert dialog.result.enabled is True
     assert dialog.result.props["src"] == "pulse"
     assert dialog.result.props["beam_e0_z"] == "1j"
+
+
+def test_source_edit_dialog_edits_eigenmode_fields(qtbot) -> None:
+    store = ProjectStore()
+    store.state.sources.extend(
+        [
+            SourceItem(
+                name="pulse",
+                kind="gaussian",
+                component="Ez",
+                props={"fcen": "0.2", "df": "0.1"},
+                enabled=False,
+            ),
+            SourceItem(
+                name="mode",
+                kind="eigenmode",
+                component="Ez",
+                props={
+                    "src": "pulse",
+                    "eig_component": "ALL_COMPONENTS",
+                    "eig_direction": "AUTOMATIC",
+                    "eig_parity": "NO_PARITY",
+                    "eig_match_freq": True,
+                },
+            ),
+        ]
+    )
+    dialog = SourceEditDialog(store, store.state.sources[1])
+    qtbot.addWidget(dialog)
+    dialog.show()
+
+    _assert_form_row_visible(dialog.form, dialog.src_name)
+    _assert_form_row_hidden(dialog.form, dialog.component_input)
+    _assert_form_row_visible(dialog.form, dialog.eig_component)
+    assert dialog.src_name.currentText() == "pulse"
+    assert dialog.eig_component.currentText() == "ALL_COMPONENTS"
+    assert dialog.eig_match_freq.isChecked() is True
+
+    dialog.eig_direction.setCurrentText("Y")
+    dialog.eig_match_freq.setChecked(False)
+    dialog.eig_vol_size_x.setText("0")
+    dialog.eig_vol_size_y.setText("3")
+    qtbot.mouseClick(dialog.save_button, QtCore.Qt.LeftButton)
+
+    assert dialog.result is not None
+    assert dialog.result.props["src"] == "pulse"
+    assert dialog.result.props["eig_direction"] == "Y"
+    assert dialog.result.props["eig_match_freq"] is False
+    assert dialog.result.props["eig_vol_size_x"] == "0"
+    assert dialog.result.props["eig_vol_size_y"] == "3"

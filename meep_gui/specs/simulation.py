@@ -51,6 +51,17 @@ class SourceSpec:
     beam_e0_x: complex = 0j
     beam_e0_y: complex = 0j
     beam_e0_z: complex = 1 + 0j
+    eig_lattice_size: tuple[float, float] | None = None
+    eig_lattice_center: tuple[float, float] | None = None
+    eig_vol_size: tuple[float, float] | None = None
+    eig_vol_center: tuple[float, float] | None = None
+    eig_direction: str = "AUTOMATIC"
+    eig_band: int = 1
+    eig_kpoint: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    eig_match_freq: bool = True
+    eig_parity: str = "NO_PARITY"
+    eig_resolution: int = 0
+    eig_tolerance: float = 1e-12
 
     @property
     def frequency(self) -> float:

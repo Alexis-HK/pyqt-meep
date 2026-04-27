@@ -336,3 +336,29 @@ def test_gaussian_beam_inherits_chirped_pulse_temporal_source_capability() -> No
     assert [item.message for item in prepared.validation.errors] == [
         "Frequency-domain solver supports only continuous sources. Custom temporal sources are not supported."
     ]
+
+
+def test_eigenmode_inherits_temporal_source_capability() -> None:
+    state = ProjectState(
+        analysis=AnalysisConfig(kind="frequency_domain_solver"),
+        sources=[
+            SourceItem(
+                name="pulse",
+                kind="gaussian",
+                component="Ez",
+                props={"fcen": "0.2", "df": "0.1"},
+                enabled=False,
+            ),
+            SourceItem(
+                name="mode",
+                kind="eigenmode",
+                component="Ez",
+                props={"src": "pulse"},
+            ),
+        ],
+    )
+
+    prepared = prepare_runtime_analysis(state)
+
+    assert prepared.validation.ok is False
+    assert "Gaussian (pulsed) sources" in prepared.validation.errors[0].message

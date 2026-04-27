@@ -7,12 +7,36 @@ from ...primitives import SOURCE_REGISTRY, source_kind
 from ...store import ProjectStore
 from ...validation import (
     ValidationResult,
+    evaluate_numeric_expression,
     validate_complex_expression,
     validate_name,
     validate_numeric_expression,
 )
 from ..common import _log_error, _set_form_row_visible, _set_invalid
 from ..scope import active_scope, parameter_names
+
+_CUSTOM_MANUAL_TEMPORAL_FIELDS = {
+    "src_func",
+    "start_time",
+    "end_time",
+    "is_integrated",
+    "center_frequency",
+    "fwidth",
+}
+
+
+def _source_field_choices(kind: str, field_id: str) -> tuple[str, ...]:
+    for field in source_kind(kind).fields:
+        if field.field_id == field_id:
+            return field.choices
+    return ()
+
+
+def _source_ref_allows_blank(kind: str) -> bool:
+    for field in source_kind(kind).fields:
+        if field.field_id == "src":
+            return not field.required
+    return False
 
 
 class SourceEditDialog(QtWidgets.QDialog):
@@ -63,6 +87,28 @@ class SourceEditDialog(QtWidgets.QDialog):
         self.beam_e0_x = QtWidgets.QLineEdit()
         self.beam_e0_y = QtWidgets.QLineEdit()
         self.beam_e0_z = QtWidgets.QLineEdit()
+        self.eig_component = QtWidgets.QComboBox()
+        self.eig_component.addItems(_source_field_choices("eigenmode", "eig_component"))
+        self.eig_direction = QtWidgets.QComboBox()
+        self.eig_direction.addItems(_source_field_choices("eigenmode", "eig_direction"))
+        self.eig_band = QtWidgets.QLineEdit()
+        self.eig_kpoint_x = QtWidgets.QLineEdit()
+        self.eig_kpoint_y = QtWidgets.QLineEdit()
+        self.eig_kpoint_z = QtWidgets.QLineEdit()
+        self.eig_match_freq = QtWidgets.QCheckBox()
+        self.eig_match_freq.setChecked(True)
+        self.eig_parity = QtWidgets.QComboBox()
+        self.eig_parity.addItems(_source_field_choices("eigenmode", "eig_parity"))
+        self.eig_resolution = QtWidgets.QLineEdit()
+        self.eig_tolerance = QtWidgets.QLineEdit()
+        self.eig_lattice_size_x = QtWidgets.QLineEdit()
+        self.eig_lattice_size_y = QtWidgets.QLineEdit()
+        self.eig_lattice_center_x = QtWidgets.QLineEdit()
+        self.eig_lattice_center_y = QtWidgets.QLineEdit()
+        self.eig_vol_size_x = QtWidgets.QLineEdit()
+        self.eig_vol_size_y = QtWidgets.QLineEdit()
+        self.eig_vol_center_x = QtWidgets.QLineEdit()
+        self.eig_vol_center_y = QtWidgets.QLineEdit()
         self._prop_widgets = {
             "src": self.src_name,
             "center_x": self.center_x,
@@ -91,6 +137,24 @@ class SourceEditDialog(QtWidgets.QDialog):
             "beam_e0_x": self.beam_e0_x,
             "beam_e0_y": self.beam_e0_y,
             "beam_e0_z": self.beam_e0_z,
+            "eig_component": self.eig_component,
+            "eig_direction": self.eig_direction,
+            "eig_band": self.eig_band,
+            "eig_kpoint_x": self.eig_kpoint_x,
+            "eig_kpoint_y": self.eig_kpoint_y,
+            "eig_kpoint_z": self.eig_kpoint_z,
+            "eig_match_freq": self.eig_match_freq,
+            "eig_parity": self.eig_parity,
+            "eig_resolution": self.eig_resolution,
+            "eig_tolerance": self.eig_tolerance,
+            "eig_lattice_size_x": self.eig_lattice_size_x,
+            "eig_lattice_size_y": self.eig_lattice_size_y,
+            "eig_lattice_center_x": self.eig_lattice_center_x,
+            "eig_lattice_center_y": self.eig_lattice_center_y,
+            "eig_vol_size_x": self.eig_vol_size_x,
+            "eig_vol_size_y": self.eig_vol_size_y,
+            "eig_vol_center_x": self.eig_vol_center_x,
+            "eig_vol_center_y": self.eig_vol_center_y,
         }
 
         self.form = QtWidgets.QFormLayout()
@@ -127,6 +191,24 @@ class SourceEditDialog(QtWidgets.QDialog):
         self.form.addRow("E0 X", self.beam_e0_x)
         self.form.addRow("E0 Y", self.beam_e0_y)
         self.form.addRow("E0 Z", self.beam_e0_z)
+        self.form.addRow("Eigen Component", self.eig_component)
+        self.form.addRow("Eigen Direction", self.eig_direction)
+        self.form.addRow("eig_band", self.eig_band)
+        self.form.addRow("eig_kpoint X", self.eig_kpoint_x)
+        self.form.addRow("eig_kpoint Y", self.eig_kpoint_y)
+        self.form.addRow("eig_kpoint Z", self.eig_kpoint_z)
+        self.form.addRow("eig_match_freq", self.eig_match_freq)
+        self.form.addRow("eig_parity", self.eig_parity)
+        self.form.addRow("eig_resolution", self.eig_resolution)
+        self.form.addRow("eig_tolerance", self.eig_tolerance)
+        self.form.addRow("eig_lattice Size X", self.eig_lattice_size_x)
+        self.form.addRow("eig_lattice Size Y", self.eig_lattice_size_y)
+        self.form.addRow("eig_lattice Center X", self.eig_lattice_center_x)
+        self.form.addRow("eig_lattice Center Y", self.eig_lattice_center_y)
+        self.form.addRow("eig_vol Size X", self.eig_vol_size_x)
+        self.form.addRow("eig_vol Size Y", self.eig_vol_size_y)
+        self.form.addRow("eig_vol Center X", self.eig_vol_center_x)
+        self.form.addRow("eig_vol Center Y", self.eig_vol_center_y)
 
         self.save_button = QtWidgets.QPushButton("Save")
         self.cancel_button = QtWidgets.QPushButton("Cancel")
@@ -143,9 +225,15 @@ class SourceEditDialog(QtWidgets.QDialog):
             self._set_field_value(field_id, item.props.get(field_id, ""))
 
         self.kind_input.currentTextChanged.connect(self._sync_kind_fields)
+        self.src_name.currentTextChanged.connect(
+            lambda _text: self._sync_kind_fields(self.kind_input.currentText())
+        )
         self.save_button.clicked.connect(self._on_save)
         self.cancel_button.clicked.connect(self.reject)
-        self._refresh_source_ref_choices(self.src_name.currentText())
+        self._refresh_source_ref_choices(
+            str(item.props.get("src", "")),
+            allow_blank=_source_ref_allows_blank(self.kind_input.currentText()),
+        )
         self._sync_kind_fields(self.kind_input.currentText())
 
     @property
@@ -170,9 +258,14 @@ class SourceEditDialog(QtWidgets.QDialog):
             widget.setText("" if value is None else str(value))
 
     def _sync_kind_fields(self, kind: str) -> None:
-        self._refresh_source_ref_choices(str(self._field_value("src")), exclude=self._exclude)
+        self._refresh_source_ref_choices(
+            str(self._field_value("src")),
+            exclude=self._exclude,
+            allow_blank=_source_ref_allows_blank(kind),
+        )
         fields = source_kind(kind).fields
         visible_fields = {field.field_id for field in fields}
+        custom_uses_ref = kind == "custom" and bool(str(self._field_value("src")).strip())
         for field in fields:
             widget = self._prop_widgets[field.field_id]
             if (
@@ -182,8 +275,15 @@ class SourceEditDialog(QtWidgets.QDialog):
             ):
                 widget.setText(str(field.default))
         for field_id, widget in self._prop_widgets.items():
-            _set_form_row_visible(self.form, widget, field_id in visible_fields)
-        _set_form_row_visible(self.form, self.component_input, kind != "gaussian_beam")
+            visible = field_id in visible_fields
+            if custom_uses_ref and field_id in _CUSTOM_MANUAL_TEMPORAL_FIELDS:
+                visible = False
+            _set_form_row_visible(self.form, widget, visible)
+        _set_form_row_visible(
+            self.form,
+            self.component_input,
+            kind not in {"gaussian_beam", "eigenmode"},
+        )
         spatial_visible = kind == "custom" and any(field.section == "spatial" for field in fields)
         temporal_visible = kind == "custom" and any(field.section == "temporal" for field in fields)
         self.spatial_header.setVisible(spatial_visible)
@@ -198,7 +298,13 @@ class SourceEditDialog(QtWidgets.QDialog):
             and src.kind in {"continuous", "gaussian", "custom", "chirped_pulse"}
         ]
 
-    def _refresh_source_ref_choices(self, current: str = "", exclude: str = "") -> None:
+    def _refresh_source_ref_choices(
+        self,
+        current: str = "",
+        exclude: str = "",
+        *,
+        allow_blank: bool = False,
+    ) -> None:
         names = [
             name
             for name in self._source_ref_names()
@@ -206,9 +312,13 @@ class SourceEditDialog(QtWidgets.QDialog):
         ]
         self.src_name.blockSignals(True)
         self.src_name.clear()
+        if allow_blank:
+            self.src_name.addItem("")
         self.src_name.addItems(names)
         if current and current in names:
             self.src_name.setCurrentText(current)
+        elif allow_blank:
+            self.src_name.setCurrentText("")
         self.src_name.blockSignals(False)
 
     def _validate_source_ref(self, value: str) -> ValidationResult:
@@ -220,6 +330,11 @@ class SourceEditDialog(QtWidgets.QDialog):
 
     def _validate_field(self, field, value: str | bool) -> ValidationResult:
         allowed = parameter_names(self.store)
+        if field.value_type == "enum":
+            text = str(value).strip()
+            if field.choices and text not in field.choices:
+                return ValidationResult(False, f"Expected one of: {', '.join(field.choices)}")
+            return ValidationResult(True, "")
         if field.value_type == "bool":
             return ValidationResult(True, "")
         if value == "" and not field.required:
@@ -232,11 +347,35 @@ class SourceEditDialog(QtWidgets.QDialog):
                 allowed,
                 extra_names=field.allowed_locals,
             )
+        if field.value_type == "int":
+            return self._validate_int_expression(str(value).strip(), allowed)
         return validate_numeric_expression(
             str(value).strip(),
             allowed,
             extra_names=field.allowed_locals,
         )
+
+    def _validate_int_expression(self, value: str, allowed) -> ValidationResult:
+        result = validate_numeric_expression(value, allowed)
+        if not result.ok:
+            return result
+        try:
+            evaluated = evaluate_numeric_expression(value, {})
+        except ValueError:
+            return result
+        if abs(evaluated - round(evaluated)) > 1e-9:
+            return ValidationResult(False, "Expression must evaluate to an integer.")
+        return result
+
+    def _validate_optional_region(self, prefix: str) -> bool:
+        size_x = str(self._field_value(f"{prefix}_size_x")).strip()
+        size_y = str(self._field_value(f"{prefix}_size_y")).strip()
+        if bool(size_x) == bool(size_y):
+            return True
+        self.store.log_message(f"{prefix}: both size_x and size_y are required.")
+        _set_invalid(self._prop_widgets[f"{prefix}_size_x"], not size_x)
+        _set_invalid(self._prop_widgets[f"{prefix}_size_y"], not size_y)
+        return False
 
     def _on_save(self) -> None:
         name = self.name_input.text().strip()
@@ -254,6 +393,11 @@ class SourceEditDialog(QtWidgets.QDialog):
             _set_invalid(self._prop_widgets[field.field_id], not result.ok)
             if not result.ok:
                 _log_error(self.store, f"{field.field_id}: {result.message}", self)
+                return
+        if kind == "eigenmode":
+            if not self._validate_optional_region("eig_lattice"):
+                return
+            if not self._validate_optional_region("eig_vol"):
                 return
 
         props = {

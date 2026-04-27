@@ -283,6 +283,99 @@ def test_gaussian_beam_script_can_inline_chirped_pulse_source_time() -> None:
     assert "src=mp.CustomSource(src_func=sources_2_time_src_func, center_frequency=0.8)," in code
 
 
+def test_eigenmode_script_emits_source_time_constants_and_optional_regions() -> None:
+    state = ProjectState(
+        sources=[
+            SourceItem(
+                name="custom_time",
+                kind="custom",
+                component="Ez",
+                props={"src_func": "t", "center_frequency": "0.3", "fwidth": "0.07"},
+                enabled=False,
+            ),
+            SourceItem(
+                name="mode",
+                kind="eigenmode",
+                component="Ez",
+                props={
+                    "src": "custom_time",
+                    "center_x": "1",
+                    "center_y": "2",
+                    "size_x": "0",
+                    "size_y": "4",
+                    "eig_component": "ALL_COMPONENTS",
+                    "eig_direction": "X",
+                    "eig_band": "2",
+                    "eig_kpoint_x": "0.1",
+                    "eig_kpoint_y": "0.2",
+                    "eig_kpoint_z": "0.3",
+                    "eig_match_freq": False,
+                    "eig_parity": "EVEN_Y+ODD_Z",
+                    "eig_resolution": "16",
+                    "eig_tolerance": "1e-9",
+                    "eig_lattice_size_x": "6",
+                    "eig_lattice_size_y": "7",
+                    "eig_lattice_center_x": "",
+                    "eig_lattice_center_y": "0.5",
+                    "eig_vol_size_x": "0",
+                    "eig_vol_size_y": "3",
+                    "eig_vol_center_x": "1.5",
+                    "eig_vol_center_y": "",
+                    "amplitude": "1+1j",
+                    "amp_func": "x - 1j*y",
+                },
+            ),
+        ],
+        analysis=AnalysisConfig(kind="field_animation"),
+    )
+
+    code = generate_script(state)
+
+    assert "def sources_2_time_src_func(t):" in code
+    assert "sources_2 = mp.EigenModeSource(" in code
+    assert "src=mp.CustomSource(src_func=sources_2_time_src_func" in code
+    assert "component=mp.ALL_COMPONENTS" in code
+    assert "direction=mp.X" in code
+    assert "eig_band=int(2)" in code
+    assert "eig_kpoint=mp.Vector3(0.1, 0.2, 0.3)" in code
+    assert "eig_match_freq=False" in code
+    assert "eig_parity=mp.EVEN_Y + mp.ODD_Z" in code
+    assert "eig_resolution=int(16)" in code
+    assert "eig_tolerance=1e-9" in code
+    assert "eig_lattice_size=mp.Vector3(6, 7, 0)" in code
+    assert "eig_lattice_center=mp.Vector3(0, 0.5, 0)" in code
+    assert "eig_vol=mp.Volume(center=mp.Vector3(1.5, 0, 0), size=mp.Vector3(0, 3, 0))" in code
+    assert "amplitude=1+1j" in code
+    assert "amp_func=sources_2_amp_func" in code
+
+
+def test_custom_source_script_can_inline_selected_temporal_source() -> None:
+    state = ProjectState(
+        sources=[
+            SourceItem(
+                name="pulse",
+                kind="gaussian",
+                component="Ez",
+                props={"fcen": "0.2", "df": "0.1"},
+                enabled=False,
+            ),
+            SourceItem(
+                name="custom_src",
+                kind="custom",
+                component="Ez",
+                props={"src": "pulse", "src_func": "t", "center_frequency": "0.3"},
+            ),
+        ],
+        analysis=AnalysisConfig(kind="field_animation"),
+    )
+
+    code = generate_script(state)
+
+    assert "sources_2 = mp.Source(" in code
+    assert "mp.GaussianSource(frequency=0.2, fwidth=0.1)" in code
+    assert "def sources_2_time_src_func" not in code
+
+
 def test_harminv_script_emits_flux_png_exports_when_monitors_exist() -> None:
     state = ProjectState(
         flux_monitors=[FluxMonitorConfig(name="tx")],

@@ -8,6 +8,24 @@ from .imports import component_map, import_meep
 LogFn = Callable[[str], None]
 
 
+def _mp_constant(mp, value: str):
+    return getattr(mp, value)
+
+
+def _mp_parity(mp, value: str):
+    parts = [part.strip() for part in str(value).split("+") if part.strip()]
+    if not parts:
+        return getattr(mp, "NO_PARITY")
+    result = getattr(mp, parts[0])
+    for part in parts[1:]:
+        result = result + getattr(mp, part)
+    return result
+
+
+def _vector3_from_pair(mp, value: tuple[float, float]):
+    return mp.Vector3(value[0], value[1], 0)
+
+
 def build_geometry(params: SimParams, _log: LogFn, mp):
     geometry = []
     for shape in params.shapes:
@@ -91,6 +109,41 @@ def build_sim(params: SimParams, log: LogFn, *, force_complex_fields: bool = Fal
                     beam_E0=mp.Vector3(spec.beam_e0_x, spec.beam_e0_y, spec.beam_e0_z),
                 )
             )
+            continue
+
+        if spec.kind == "eigenmode":
+            src_time = build_source_time()
+            source_kwargs = dict(
+                src=src_time,
+                center=mp.Vector3(spec.center_x, spec.center_y, 0),
+                size=mp.Vector3(spec.width_x, spec.width_y, 0),
+                component=_mp_constant(mp, spec.component),
+                direction=_mp_constant(mp, spec.eig_direction),
+                eig_band=spec.eig_band,
+                eig_kpoint=mp.Vector3(*spec.eig_kpoint),
+                eig_match_freq=spec.eig_match_freq,
+                eig_parity=_mp_parity(mp, spec.eig_parity),
+                eig_resolution=spec.eig_resolution,
+                eig_tolerance=spec.eig_tolerance,
+                amplitude=spec.amplitude,
+            )
+            if spec.amp_func is not None:
+                source_kwargs["amp_func"] = lambda pos, fn=spec.amp_func: fn(pos.x, pos.y)
+            if spec.eig_lattice_size is not None:
+                source_kwargs["eig_lattice_size"] = _vector3_from_pair(
+                    mp,
+                    spec.eig_lattice_size,
+                )
+                source_kwargs["eig_lattice_center"] = _vector3_from_pair(
+                    mp,
+                    spec.eig_lattice_center or (0.0, 0.0),
+                )
+            if spec.eig_vol_size is not None:
+                source_kwargs["eig_vol"] = mp.Volume(
+                    center=_vector3_from_pair(mp, spec.eig_vol_center or (0.0, 0.0)),
+                    size=_vector3_from_pair(mp, spec.eig_vol_size),
+                )
+            sources.append(mp.EigenModeSource(**source_kwargs))
             continue
 
         comp = components.get(spec.component, mp.Ez)
