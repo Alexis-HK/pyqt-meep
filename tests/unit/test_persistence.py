@@ -145,6 +145,35 @@ def test_source_enabled_defaults_true_and_roundtrips() -> None:
     assert dumped["sources"][1]["enabled"] is False
 
 
+def test_ring_geometry_roundtrips() -> None:
+    raw = _load_fixture("minimal_analysis.json")
+    raw["materials"] = [
+        {"name": "si", "index_expr": "3"},
+        {"name": "air", "index_expr": "1"},
+    ]
+    raw["geometries"] = [
+        {
+            "name": "ring",
+            "kind": "ring",
+            "material": "si",
+            "props": {
+                "inner_material": "air",
+                "radius": "2",
+                "width": "0.4",
+                "center_x": "0",
+                "center_y": "0",
+            },
+        }
+    ]
+
+    state = state_from_dict(raw)
+    dumped = state_to_dict(state)
+
+    assert state.geometries[0].kind == "ring"
+    assert state.geometries[0].props["inner_material"] == "air"
+    assert dumped["geometries"] == raw["geometries"]
+
+
 def test_invalid_symmetry_fixture_normalizes_to_safe_defaults() -> None:
     state = state_from_dict(_load_fixture("invalid_symmetry.json"))
 

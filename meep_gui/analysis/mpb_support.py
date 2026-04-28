@@ -10,32 +10,31 @@ from ..scene.runtime import eval_required
 
 def build_mpb_geometry(state: ProjectState, mp, values: dict[str, float], *, deps) -> list[object]:
     compiled = compile_project_scene(state, parameter_values=values)
-    materials: dict[str, float] = {}
+    materials: dict[str, object] = {}
     for medium in compiled.scene.media:
         if medium.name:
-            materials[medium.name] = material_kind(medium.kind).resolve_index(
+            index = material_kind(medium.kind).resolve_index(
                 medium,
                 compiled.context,
                 eval_required,
             )
+            materials[medium.name] = mp.Medium(index=index)
 
     geometry = []
     for obj in compiled.scene.objects:
         if obj.spatial_material.kind != "uniform":
             raise ValueError(f"Geometry '{obj.name}': unsupported spatial material kind.")
-        medium_name = obj.spatial_material.medium_name
-        if medium_name not in materials:
-            raise ValueError(f"Geometry '{obj.name}': unknown material '{medium_name}'")
-        medium = mp.Medium(index=materials[medium_name])
-        geometry.append(
-            geometry_kind(obj.geometry.kind).build_mpb_object(
-                obj,
-                medium,
-                mp,
-                compiled.context,
-                eval_required,
-            )
+        lowered = geometry_kind(obj.geometry.kind).build_mpb_object(
+            obj,
+            materials,
+            mp,
+            compiled.context,
+            eval_required,
         )
+        if isinstance(lowered, (list, tuple)):
+            geometry.extend(lowered)
+        else:
+            geometry.append(lowered)
     return geometry
 
 

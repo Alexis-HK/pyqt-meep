@@ -38,9 +38,9 @@ class GeometryKindSpec:
     display_name: str
     fields: tuple[PrimitiveField, ...]
     compile_scene_object: Callable[[Any], "SceneObject"]
-    to_shape: Callable[["SceneObject", float, "CompilationContext", SceneEvalFn], Any]
+    to_shape: Callable[["SceneObject", dict[str, float], "CompilationContext", SceneEvalFn], Any]
     emit_script_object: Callable[[str, int, "SceneObject"], tuple[str, ...]]
-    build_mpb_object: Callable[["SceneObject", Any, Any, "CompilationContext", SceneEvalFn], Any]
+    build_mpb_object: Callable[["SceneObject", dict[str, Any], Any, "CompilationContext", SceneEvalFn], Any]
 
 
 @dataclass(frozen=True)

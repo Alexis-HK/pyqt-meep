@@ -18,6 +18,29 @@ from ..dialogs import GeometryEditDialog
 from ..scope import active_scope, parameter_names
 
 
+def _material_names(store: ProjectStore) -> list[str]:
+    return [mat.name for mat in store.state.materials if mat.name]
+
+
+def _set_combo_items(
+    combo: QtWidgets.QComboBox,
+    items: list[str],
+    *,
+    selected: str = "",
+    include_blank: bool = False,
+) -> None:
+    choices = list(items)
+    if include_blank:
+        choices.insert(0, "")
+    if selected and selected not in choices:
+        choices.append(selected)
+    combo.blockSignals(True)
+    combo.clear()
+    combo.addItems(choices)
+    combo.setCurrentText(selected)
+    combo.blockSignals(False)
+
+
 class GeometryTab(QtWidgets.QWidget):
     def __init__(self, store: ProjectStore) -> None:
         super().__init__()
@@ -28,17 +51,21 @@ class GeometryTab(QtWidgets.QWidget):
         self.kind_input = QtWidgets.QComboBox()
         self.kind_input.addItems(list(GEOMETRY_REGISTRY))
         self.material_input = QtWidgets.QComboBox()
+        self.inner_material = QtWidgets.QComboBox()
         self.center_x = QtWidgets.QLineEdit()
         self.center_y = QtWidgets.QLineEdit()
         self.size_x = QtWidgets.QLineEdit()
         self.size_y = QtWidgets.QLineEdit()
         self.radius = QtWidgets.QLineEdit()
+        self.width = QtWidgets.QLineEdit()
         self._prop_widgets = {
+            "inner_material": self.inner_material,
             "center_x": self.center_x,
             "center_y": self.center_y,
             "size_x": self.size_x,
             "size_y": self.size_y,
             "radius": self.radius,
+            "width": self.width,
         }
 
         self.form_container = QtWidgets.QWidget()
@@ -46,11 +73,13 @@ class GeometryTab(QtWidgets.QWidget):
         self.form.addRow("Name", self.name_input)
         self.form.addRow("Type", self.kind_input)
         self.form.addRow("Material", self.material_input)
+        self.form.addRow("Inner Material", self.inner_material)
         self.form.addRow("Center X", self.center_x)
         self.form.addRow("Center Y", self.center_y)
         self.form.addRow("Size X", self.size_x)
         self.form.addRow("Size Y", self.size_y)
         self.form.addRow("Radius", self.radius)
+        self.form.addRow("Width", self.width)
         self.form_scroll = _scroll_area_for(self.form_container)
 
         self.add_button = QtWidgets.QPushButton("Add")
@@ -95,6 +124,21 @@ class GeometryTab(QtWidgets.QWidget):
             _set_form_row_visible(self.form, widget, field_id in visible_fields)
         _refresh_scroll_area(self.form_scroll)
 
+    def _field_value(self, field_id: str) -> str:
+        widget = self._prop_widgets[field_id]
+        if isinstance(widget, QtWidgets.QComboBox):
+            return widget.currentText().strip()
+        return widget.text().strip()
+
+    def _set_field_value(self, field_id: str, value: str) -> None:
+        widget = self._prop_widgets[field_id]
+        if isinstance(widget, QtWidgets.QComboBox):
+            if value and widget.findText(value) < 0:
+                widget.addItem(value)
+            widget.setCurrentText(value)
+        else:
+            widget.setText(value)
+
     def _validate(self, name: str, kind: str, material: str, row: int) -> bool:
         scope = active_scope(self.store)
         registry = scope.name_registry()
@@ -115,10 +159,24 @@ class GeometryTab(QtWidgets.QWidget):
         _set_invalid(self.material_input, False)
 
         allowed = parameter_names(self.store)
+        materials = set(_material_names(self.store))
         ok = True
         for field in geometry_kind(kind).fields:
             widget = self._prop_widgets[field.field_id]
-            result = validate_numeric_expression(widget.text().strip(), allowed)
+            value = self._field_value(field.field_id)
+            if field.value_type == "material":
+                valid = bool(value) and value in materials
+                _set_invalid(widget, not valid)
+                if not valid:
+                    message = (
+                        f"{field.label} is required."
+                        if not value
+                        else f"Unknown {field.label.lower()} '{value}'."
+                    )
+                    _log_error(self.store, message, self)
+                    ok = False
+                continue
+            result = validate_numeric_expression(value, allowed)
             _set_invalid(widget, not result.ok)
             if not result.ok:
                 _log_error(self.store, f"{field.field_id}: {result.message}", self)
@@ -127,14 +185,14 @@ class GeometryTab(QtWidgets.QWidget):
 
     def _build_props(self, kind: str) -> dict[str, str]:
         return {
-            field.field_id: self._prop_widgets[field.field_id].text().strip()
+            field.field_id: self._field_value(field.field_id)
             for field in geometry_kind(kind).fields
         }
 
     def _on_add(self) -> None:
         name = self.name_input.text().strip()
         kind = self.kind_input.currentText()
-        material = self.material_input.currentText()
+        material = self.material_input.currentText().strip()
         geometries = active_scope(self.store).geometries
         row = len(geometries)
         if not self._validate(name, kind, material, row):
@@ -178,17 +236,28 @@ class GeometryTab(QtWidgets.QWidget):
         self.kind_input.setCurrentText(item.kind)
         self.material_input.setCurrentText(item.material)
         for field_id, widget in self._prop_widgets.items():
-            widget.setText(item.props.get(field_id, ""))
+            self._set_field_value(field_id, item.props.get(field_id, ""))
         self._sync_kind_fields(item.kind)
         _set_invalid(self.name_input, False)
 
     def refresh(self) -> None:
-        self.material_input.clear()
-        self.material_input.addItems([mat.name for mat in self.store.state.materials])
+        material_items = _material_names(self.store)
+        _set_combo_items(
+            self.material_input,
+            material_items,
+            selected=self.material_input.currentText().strip(),
+        )
+        _set_combo_items(
+            self.inner_material,
+            material_items,
+            selected=self.inner_material.currentText().strip(),
+            include_blank=True,
+        )
 
         self.table.setRowCount(0)
         invalid: dict[str, str] = {}
         allowed = parameter_names(self.store)
+        materials = set(material_items)
         for geo in active_scope(self.store).geometries:
             row = self.table.rowCount()
             self.table.insertRow(row)
@@ -198,6 +267,14 @@ class GeometryTab(QtWidgets.QWidget):
             message = ""
             for field in geometry_kind(geo.kind).fields:
                 value = geo.props.get(field.field_id, "")
+                if field.value_type == "material":
+                    if not value:
+                        message = f"Geometry '{geo.name}': {field.label} is required."
+                        break
+                    if value not in materials:
+                        message = f"Geometry '{geo.name}': unknown {field.label.lower()} '{value}'."
+                        break
+                    continue
                 result = validate_numeric_expression(value, allowed)
                 if not result.ok:
                     message = f"Geometry '{geo.name}': {field.field_id} {result.message}"

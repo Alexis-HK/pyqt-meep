@@ -7,7 +7,9 @@ from meep_gui.model import (
     Domain,
     FluxMonitorConfig,
     FrequencyDomainSolverConfig,
+    GeometryItem,
     KPoint,
+    Material,
     MeepKPointsConfig,
     MpbModeSolverConfig,
     Parameter,
@@ -100,6 +102,44 @@ def test_field_animation_script_emits_cylindrical_kwargs_when_enabled() -> None:
 
     assert "dimensions=mp.CYLINDRICAL" in code
     assert "m=m_mode + 1" in code
+
+
+def test_field_animation_script_emits_ring_geometry() -> None:
+    state = ProjectState(
+        materials=[
+            Material(name="si", index_expr="3"),
+            Material(name="air", index_expr="1"),
+        ],
+        geometries=[
+            GeometryItem(
+                name="ring",
+                kind="ring",
+                material="si",
+                props={
+                    "inner_material": "air",
+                    "radius": "rad",
+                    "width": "w",
+                    "center_x": "0",
+                    "center_y": "0",
+                },
+            )
+        ],
+        parameters=[Parameter(name="rad", expr="2"), Parameter(name="w", expr="0.4")],
+        analysis=AnalysisConfig(kind="field_animation"),
+    )
+
+    code = generate_script(state)
+
+    assert "geometry_shape_1_width = w" in code
+    assert "geometry_shape_1_outer_radius = (rad) + geometry_shape_1_width / 2" in code
+    assert "geometry_shape_1_inner_radius = (rad) - geometry_shape_1_width / 2" in code
+    assert "Geometry 'ring': inner radius must be positive." in code
+    assert "geometry_shape_1_outer = mp.Cylinder(radius=geometry_shape_1_outer_radius" in code
+    assert "material=materials['si'])" in code
+    assert "geometry.append(geometry_shape_1_outer)" in code
+    assert "geometry_shape_1_inner = mp.Cylinder(radius=geometry_shape_1_inner_radius" in code
+    assert "material=materials['air'])" in code
+    assert "geometry.append(geometry_shape_1_inner)" in code
 
 
 def test_gaussian_beam_script_defines_disabled_temporal_source_without_appending() -> None:

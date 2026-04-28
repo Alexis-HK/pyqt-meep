@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import cmath
 
+import pytest
+
 from meep_gui.model import (
     GEOMETRY_FIELDS,
     GEOMETRY_KINDS,
@@ -14,6 +16,7 @@ from meep_gui.model import (
     SourceItem,
     Parameter,
 )
+from meep_gui.analysis.mpb_support import build_mpb_geometry
 from meep_gui.primitives import (
     DEFAULT_MATERIAL_KIND,
     DEFAULT_MONITOR_KIND,
@@ -26,7 +29,7 @@ from meep_gui.scene import compile_project_scene, scene_to_flux_specs, scene_to_
 
 
 def test_primitive_registries_cover_current_builtin_kinds() -> None:
-    assert tuple(GEOMETRY_REGISTRY) == ("circle", "block")
+    assert tuple(GEOMETRY_REGISTRY) == ("circle", "ring", "block")
     assert tuple(SOURCE_REGISTRY) == (
         "continuous",
         "gaussian",
@@ -101,6 +104,127 @@ def test_scene_compilation_and_runtime_lowering_use_registry_hooks() -> None:
     assert params.sources[0].bandwidth == 0.0
     assert flux_specs[0].name == "flux1"
     assert flux_specs[0].nfreq == 32
+
+
+def test_ring_geometry_lowers_to_outer_and_inner_runtime_shapes() -> None:
+    state = ProjectState(
+        materials=[
+            Material(name="si", index_expr="3"),
+            Material(name="air", index_expr="1"),
+        ],
+        geometries=[
+            GeometryItem(
+                name="ring",
+                kind="ring",
+                material="si",
+                props={
+                    "inner_material": "air",
+                    "radius": "2",
+                    "width": "0.4",
+                    "center_x": "0.5",
+                    "center_y": "-0.25",
+                },
+            )
+        ],
+    )
+
+    compiled = compile_project_scene(state)
+    params = scene_to_sim_params(compiled.scene, compiled.context)
+
+    ring = compiled.scene.objects[0].geometry.ring
+    assert compiled.scene.objects[0].geometry.kind == "ring"
+    assert ring is not None
+    assert ring.inner_medium_name == "air"
+    assert len(params.shapes) == 2
+    assert [shape.kind for shape in params.shapes] == ["circle", "circle"]
+    assert [shape.radius for shape in params.shapes] == [2.2, 1.8]
+    assert [shape.eps for shape in params.shapes] == [9.0, 1.0]
+    assert [(shape.center_x, shape.center_y) for shape in params.shapes] == [
+        (0.5, -0.25),
+        (0.5, -0.25),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("props", "message"),
+    [
+        (
+            {"inner_material": "", "radius": "2", "width": "0.4"},
+            "inner material is required",
+        ),
+        (
+            {"inner_material": "air", "radius": "2", "width": "0"},
+            "width must be positive",
+        ),
+        (
+            {"inner_material": "air", "radius": "0.1", "width": "0.4"},
+            "inner radius must be positive",
+        ),
+    ],
+)
+def test_ring_geometry_runtime_validation(props: dict[str, str], message: str) -> None:
+    state = ProjectState(
+        materials=[
+            Material(name="si", index_expr="3"),
+            Material(name="air", index_expr="1"),
+        ],
+        geometries=[
+            GeometryItem(
+                name="ring",
+                kind="ring",
+                material="si",
+                props={**props, "center_x": "0", "center_y": "0"},
+            )
+        ],
+    )
+
+    compiled = compile_project_scene(state)
+    with pytest.raises(ValueError, match=message):
+        scene_to_sim_params(compiled.scene, compiled.context)
+
+
+def test_ring_geometry_lowers_to_two_mpb_objects() -> None:
+    class _FakeMP:
+        inf = "inf"
+
+        @staticmethod
+        def Medium(index=1):
+            return ("Medium", index)
+
+        @staticmethod
+        def Vector3(x=0.0, y=0.0, z=0.0):
+            return (x, y, z)
+
+        @staticmethod
+        def Cylinder(**kwargs):
+            return ("Cylinder", kwargs)
+
+    state = ProjectState(
+        materials=[
+            Material(name="si", index_expr="3"),
+            Material(name="air", index_expr="1"),
+        ],
+        geometries=[
+            GeometryItem(
+                name="ring",
+                kind="ring",
+                material="si",
+                props={
+                    "inner_material": "air",
+                    "radius": "2",
+                    "width": "0.4",
+                    "center_x": "0",
+                    "center_y": "0",
+                },
+            )
+        ],
+    )
+
+    geometry = build_mpb_geometry(state, _FakeMP(), {}, deps=None)
+
+    assert len(geometry) == 2
+    assert [item[1]["radius"] for item in geometry] == [2.2, 1.8]
+    assert [item[1]["material"] for item in geometry] == [("Medium", 3.0), ("Medium", 1.0)]
 
 
 def test_gaussian_beam_resolves_disabled_temporal_source_and_filters_runtime_sources() -> None:

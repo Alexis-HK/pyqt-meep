@@ -14,23 +14,29 @@ def eval_required(expr: str, context: CompilationContext, label: str) -> float:
 
 
 def scene_to_sim_params(scene: SceneSpec, context: CompilationContext) -> SimParams:
-    media_index: dict[str, float] = {}
+    eps_by_material: dict[str, float] = {}
     for medium in scene.media:
-        media_index[medium.name] = material_kind(medium.kind).resolve_index(
+        index = material_kind(medium.kind).resolve_index(
             medium,
             context,
             eval_required,
         )
+        eps_by_material[medium.name] = index**2
 
     shapes: list[Shape] = []
     for obj in scene.objects:
         if obj.spatial_material.kind != "uniform":
             raise ValueError(f"Geometry '{obj.name}': unsupported spatial material kind.")
-        medium_name = obj.spatial_material.medium_name
-        if medium_name not in media_index:
-            raise ValueError(f"Geometry '{obj.name}': unknown material '{medium_name}'")
-        eps = media_index[medium_name] ** 2
-        shapes.append(geometry_kind(obj.geometry.kind).to_shape(obj, eps, context, eval_required))
+        lowered = geometry_kind(obj.geometry.kind).to_shape(
+            obj,
+            eps_by_material,
+            context,
+            eval_required,
+        )
+        if isinstance(lowered, (list, tuple)):
+            shapes.extend(lowered)
+        else:
+            shapes.append(lowered)
 
     sources: list[SourceSpec] = [
         source_kind(item.kind).to_runtime_source(item, context, eval_required)

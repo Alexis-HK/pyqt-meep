@@ -16,6 +16,7 @@ from meep_gui.model import (
     FluxMonitorConfig,
     GeometryItem,
     KPoint,
+    Material,
     MeepKPointsConfig,
     MpbModeSolverConfig,
     Parameter,
@@ -1589,6 +1590,48 @@ def test_geometry_tab_hides_irrelevant_rows_and_preserves_switched_values(qtbot)
     assert tab.radius.text() == "2.5"
 
 
+def test_geometry_tab_supports_single_row_ring(qtbot) -> None:
+    store = ProjectStore()
+    store.state.materials = [Material(name="si", index_expr="3"), Material(name="air", index_expr="1")]
+    tab = GeometryTab(store)
+    qtbot.addWidget(tab)
+    tab.show()
+
+    tab.kind_input.setCurrentText("ring")
+
+    _assert_form_row_visible(tab.form, tab.inner_material)
+    _assert_form_row_visible(tab.form, tab.radius)
+    _assert_form_row_visible(tab.form, tab.width)
+    _assert_form_row_visible(tab.form, tab.center_x)
+    _assert_form_row_visible(tab.form, tab.center_y)
+    _assert_form_row_hidden(tab.form, tab.size_x)
+    _assert_form_row_hidden(tab.form, tab.size_y)
+    assert tab.inner_material.currentText() == ""
+
+    tab.name_input.setText("ring")
+    tab.material_input.setCurrentText("si")
+    tab.radius.setText("2")
+    tab.width.setText("0.4")
+    tab.center_x.setText("0")
+    tab.center_y.setText("0")
+    qtbot.mouseClick(tab.add_button, QtCore.Qt.LeftButton)
+    assert store.state.geometries == []
+
+    tab.inner_material.setCurrentText("air")
+    qtbot.mouseClick(tab.add_button, QtCore.Qt.LeftButton)
+    assert len(store.state.geometries) == 1
+    assert store.state.geometries[0].kind == "ring"
+    assert store.state.geometries[0].material == "si"
+    assert store.state.geometries[0].props["inner_material"] == "air"
+
+    tab.kind_input.setCurrentText("block")
+    _assert_form_row_hidden(tab.form, tab.inner_material)
+    _assert_form_row_hidden(tab.form, tab.width)
+    tab.kind_input.setCurrentText("ring")
+    assert tab.inner_material.currentText() == "air"
+    assert tab.width.text() == "0.4"
+
+
 def test_sources_tab_hides_irrelevant_rows_and_preserves_switched_values(qtbot) -> None:
     store = ProjectStore()
     tab = SourcesTab(store)
@@ -1919,6 +1962,43 @@ def test_geometry_edit_dialog_hides_irrelevant_rows_and_preserves_switched_value
     dialog.kind_input.setCurrentText("circle")
     _assert_form_row_visible(dialog.form, dialog.radius)
     assert dialog.radius.text() == "3.4"
+
+
+def test_geometry_edit_dialog_supports_ring_fields(qtbot) -> None:
+    store = ProjectStore()
+    store.state.materials = [Material(name="si", index_expr="3"), Material(name="air", index_expr="1")]
+    dialog = GeometryEditDialog(
+        store,
+        GeometryItem(
+            name="ring",
+            kind="ring",
+            material="si",
+            props={
+                "inner_material": "air",
+                "radius": "2",
+                "width": "0.4",
+                "center_x": "0",
+                "center_y": "0",
+            },
+        ),
+    )
+    qtbot.addWidget(dialog)
+    dialog.show()
+
+    _assert_form_row_visible(dialog.form, dialog.inner_material)
+    _assert_form_row_visible(dialog.form, dialog.width)
+    _assert_form_row_hidden(dialog.form, dialog.size_x)
+    _assert_form_row_hidden(dialog.form, dialog.size_y)
+    assert dialog.inner_material.currentText() == "air"
+
+    dialog.width.setText("0.6")
+    dialog.kind_input.setCurrentText("circle")
+    _assert_form_row_hidden(dialog.form, dialog.inner_material)
+    _assert_form_row_hidden(dialog.form, dialog.width)
+    dialog.kind_input.setCurrentText("ring")
+    _assert_form_row_visible(dialog.form, dialog.inner_material)
+    assert dialog.inner_material.currentText() == "air"
+    assert dialog.width.text() == "0.6"
 
 
 def test_source_edit_dialog_hides_irrelevant_rows_and_preserves_switched_values(qtbot) -> None:

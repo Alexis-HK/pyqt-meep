@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 MediumKind = Literal["constant", "lossy_narrowband", "dispersive", "nonlinear", "magnetic"]
-GeometryKind = Literal["block", "circle", "polygon", "imported_polygon"]
+GeometryKind = Literal["block", "circle", "ring", "polygon", "imported_polygon"]
 SpatialMaterialKind = Literal["uniform", "function", "grid"]
 EvolutionKind = Literal["static", "translate", "rotate", "keyframed", "scripted"]
 SourceKind = Literal[
@@ -67,10 +67,18 @@ class CircleGeometrySpec:
 
 
 @dataclass(frozen=True)
+class RingGeometrySpec:
+    radius_expr: str
+    width_expr: str
+    inner_medium_name: str
+
+
+@dataclass(frozen=True)
 class GeometrySpec:
     kind: GeometryKind
     block: BlockGeometrySpec | None = None
     circle: CircleGeometrySpec | None = None
+    ring: RingGeometrySpec | None = None
 
 
 @dataclass(frozen=True)
