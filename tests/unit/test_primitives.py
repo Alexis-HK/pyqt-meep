@@ -29,7 +29,13 @@ from meep_gui.scene import compile_project_scene, scene_to_flux_specs, scene_to_
 
 
 def test_primitive_registries_cover_current_builtin_kinds() -> None:
-    assert tuple(GEOMETRY_REGISTRY) == ("circle", "ring", "block")
+    assert tuple(GEOMETRY_REGISTRY) == ("circle", "ring", "block", "polygon", "scripted")
+    assert [kind for kind, spec in GEOMETRY_REGISTRY.items() if spec.editor_visible] == [
+        "circle",
+        "ring",
+        "block",
+        "scripted",
+    ]
     assert tuple(SOURCE_REGISTRY) == (
         "continuous",
         "gaussian",

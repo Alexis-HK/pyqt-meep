@@ -13,6 +13,8 @@ class Shape:
     size_y: float = 1.0
     radius: float = 1.0
     eps: float = 12.0
+    vertices: list[tuple[float, float]] = field(default_factory=list)
+    priority: int = 0
 
 
 @dataclass

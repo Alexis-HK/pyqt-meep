@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 
 from ..model import ProjectState
-from ..primitives import geometry_kind, material_kind
+from ..primitives import geometry_kind, geometry_priority, material_kind
 from ..scene import compile_project_scene
 from ..scene.runtime import eval_required
 
@@ -21,7 +21,11 @@ def build_mpb_geometry(state: ProjectState, mp, values: dict[str, float], *, dep
             materials[medium.name] = mp.Medium(index=index)
 
     geometry = []
-    for obj in compiled.scene.objects:
+    ordered_objects = sorted(
+        enumerate(compiled.scene.objects),
+        key=lambda item: (geometry_priority(item[1]), item[0]),
+    )
+    for _idx, obj in ordered_objects:
         if obj.spatial_material.kind != "uniform":
             raise ValueError(f"Geometry '{obj.name}': unsupported spatial material kind.")
         lowered = geometry_kind(obj.geometry.kind).build_mpb_object(

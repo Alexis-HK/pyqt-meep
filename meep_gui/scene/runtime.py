@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..primitives import geometry_kind, material_kind, monitor_kind, source_kind
+from ..primitives import geometry_kind, geometry_priority, material_kind, monitor_kind, source_kind
 from ..specs.simulation import FluxMonitorSpec, Shape, SimParams, SourceSpec, SymmetrySpec
 from ..validation import evaluate_numeric_expression, parse_complex_literal
 from .types import CompilationContext, SceneSpec
@@ -24,7 +24,11 @@ def scene_to_sim_params(scene: SceneSpec, context: CompilationContext) -> SimPar
         eps_by_material[medium.name] = index**2
 
     shapes: list[Shape] = []
-    for obj in scene.objects:
+    ordered_objects = sorted(
+        enumerate(scene.objects),
+        key=lambda item: (geometry_priority(item[1]), item[0]),
+    )
+    for _idx, obj in ordered_objects:
         if obj.spatial_material.kind != "uniform":
             raise ValueError(f"Geometry '{obj.name}': unsupported spatial material kind.")
         lowered = geometry_kind(obj.geometry.kind).to_shape(

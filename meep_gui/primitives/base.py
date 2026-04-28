@@ -41,6 +41,7 @@ class GeometryKindSpec:
     to_shape: Callable[["SceneObject", dict[str, float], "CompilationContext", SceneEvalFn], Any]
     emit_script_object: Callable[[str, int, "SceneObject"], tuple[str, ...]]
     build_mpb_object: Callable[["SceneObject", dict[str, Any], Any, "CompilationContext", SceneEvalFn], Any]
+    editor_visible: bool = True
 
 
 @dataclass(frozen=True)

@@ -28,7 +28,7 @@ def _vector3_from_pair(mp, value: tuple[float, float]):
 
 def build_geometry(params: SimParams, _log: LogFn, mp):
     geometry = []
-    for shape in params.shapes:
+    for shape in sorted(params.shapes, key=lambda item: item.priority):
         material = mp.Medium(epsilon=shape.eps)
         if shape.kind == "rect":
             geometry.append(
@@ -44,6 +44,14 @@ def build_geometry(params: SimParams, _log: LogFn, mp):
                     radius=shape.radius,
                     height=mp.inf,
                     center=mp.Vector3(shape.center_x, shape.center_y),
+                    material=material,
+                )
+            )
+        elif shape.kind == "polygon":
+            geometry.append(
+                mp.Prism(
+                    vertices=[mp.Vector3(x, y, 0) for x, y in shape.vertices],
+                    height=mp.inf,
                     material=material,
                 )
             )

@@ -1590,12 +1590,18 @@ def test_geometry_tab_hides_irrelevant_rows_and_preserves_switched_values(qtbot)
     assert tab.radius.text() == "2.5"
 
 
-def test_geometry_tab_supports_single_row_ring(qtbot) -> None:
+def test_geometry_tab_supports_single_row_ring(qtbot, monkeypatch) -> None:
     store = ProjectStore()
     store.state.materials = [Material(name="si", index_expr="3"), Material(name="air", index_expr="1")]
     tab = GeometryTab(store)
     qtbot.addWidget(tab)
     tab.show()
+    warning_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        QtWidgets.QMessageBox,
+        "warning",
+        lambda _parent, title, msg: warning_calls.append((title, msg)),
+    )
 
     tab.kind_input.setCurrentText("ring")
 
@@ -1616,6 +1622,7 @@ def test_geometry_tab_supports_single_row_ring(qtbot) -> None:
     tab.center_y.setText("0")
     qtbot.mouseClick(tab.add_button, QtCore.Qt.LeftButton)
     assert store.state.geometries == []
+    assert warning_calls
 
     tab.inner_material.setCurrentText("air")
     qtbot.mouseClick(tab.add_button, QtCore.Qt.LeftButton)
@@ -1630,6 +1637,39 @@ def test_geometry_tab_supports_single_row_ring(qtbot) -> None:
     tab.kind_input.setCurrentText("ring")
     assert tab.inner_material.currentText() == "air"
     assert tab.width.text() == "0.4"
+
+
+def test_geometry_tab_supports_scripted_geometry(qtbot) -> None:
+    pytest.importorskip("shapely")
+    store = ProjectStore()
+    store.state.materials = [Material(name="silicon", index_expr="3.4")]
+    tab = GeometryTab(store)
+    qtbot.addWidget(tab)
+    tab.show()
+
+    tab.kind_input.setCurrentText("scripted")
+
+    _assert_form_row_hidden(tab.form, tab.material_input)
+    _assert_form_row_visible(tab.form, tab.script_source)
+    assert not tab.validate_script_button.isHidden()
+    _assert_form_row_visible(tab.form, tab.script_summary)
+    _assert_form_row_visible(tab.form, tab.script_errors)
+
+    tab.name_input.setText("scripted")
+    tab.script_source.setPlainText(
+        'g = rect(center=(0, 0), size=(1, 1))\n'
+        'emit(g, material=materials["silicon"])'
+    )
+    qtbot.mouseClick(tab.validate_script_button, QtCore.Qt.LeftButton)
+
+    assert "generated polygons" in tab.script_summary.text()
+    assert tab.script_errors.toPlainText() == ""
+
+    qtbot.mouseClick(tab.add_button, QtCore.Qt.LeftButton)
+    assert len(store.state.geometries) == 1
+    assert store.state.geometries[0].kind == "scripted"
+    assert store.state.geometries[0].material == ""
+    assert "emit(g" in store.state.geometries[0].props["source"]
 
 
 def test_sources_tab_hides_irrelevant_rows_and_preserves_switched_values(qtbot) -> None:
@@ -1999,6 +2039,46 @@ def test_geometry_edit_dialog_supports_ring_fields(qtbot) -> None:
     _assert_form_row_visible(dialog.form, dialog.inner_material)
     assert dialog.inner_material.currentText() == "air"
     assert dialog.width.text() == "0.6"
+
+
+def test_geometry_edit_dialog_supports_scripted_geometry(qtbot) -> None:
+    pytest.importorskip("shapely")
+    store = ProjectStore()
+    store.state.materials = [Material(name="silicon", index_expr="3.4")]
+    dialog = GeometryEditDialog(
+        store,
+        GeometryItem(
+            name="scripted",
+            kind="scripted",
+            material="",
+            props={
+                "source": (
+                    'g = rect(center=(0, 0), size=(1, 1))\n'
+                    'emit(g, material=materials["silicon"])'
+                )
+            },
+        ),
+    )
+    qtbot.addWidget(dialog)
+    dialog.show()
+
+    _assert_form_row_hidden(dialog.form, dialog.material_input)
+    _assert_form_row_visible(dialog.form, dialog.script_source)
+    qtbot.mouseClick(dialog.validate_script_button, QtCore.Qt.LeftButton)
+
+    assert "generated polygons" in dialog.script_summary.text()
+    assert dialog.script_errors.toPlainText() == ""
+
+    dialog.script_source.setPlainText(
+        'g = circle(center=(0, 0), radius=0.5, segments=16)\n'
+        'emit(g, material=materials["silicon"])'
+    )
+    qtbot.mouseClick(dialog.save_button, QtCore.Qt.LeftButton)
+
+    assert dialog.result is not None
+    assert dialog.result.kind == "scripted"
+    assert dialog.result.material == ""
+    assert "circle" in dialog.result.props["source"]
 
 
 def test_source_edit_dialog_hides_irrelevant_rows_and_preserves_switched_values(qtbot) -> None:

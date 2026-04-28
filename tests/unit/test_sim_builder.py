@@ -1,7 +1,48 @@
 from __future__ import annotations
 
 import meep_gui.sim.builder as sim_builder
-from meep_gui.specs.simulation import SimParams, SourceSpec, SourceTimeSpec
+from meep_gui.specs.simulation import Shape, SimParams, SourceSpec, SourceTimeSpec
+
+
+def test_build_geometry_lowers_polygon_shapes_to_prisms() -> None:
+    class _FakeMP:
+        inf = "inf"
+
+        @staticmethod
+        def Medium(epsilon=1):
+            return ("Medium", epsilon)
+
+        @staticmethod
+        def Vector3(x=0.0, y=0.0, z=0.0):
+            return (x, y, z)
+
+        @staticmethod
+        def Prism(**kwargs):
+            return {"kind": "Prism", **kwargs}
+
+    geometry = sim_builder.build_geometry(
+        SimParams(
+            shapes=[
+                Shape(
+                    kind="polygon",
+                    vertices=[(0, 0), (1, 0), (0, 1)],
+                    eps=12.0,
+                    priority=5,
+                )
+            ]
+        ),
+        lambda _msg: None,
+        _FakeMP(),
+    )
+
+    assert geometry == [
+        {
+            "kind": "Prism",
+            "vertices": [(0, 0, 0), (1, 0, 0), (0, 1, 0)],
+            "height": "inf",
+            "material": ("Medium", 12.0),
+        }
+    ]
 
 
 def test_build_sim_omits_k_point_when_unset(monkeypatch) -> None:

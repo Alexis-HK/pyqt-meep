@@ -110,6 +110,31 @@ def _compile_ring(item):
     )
 
 
+def _compile_polygon(item):
+    from ..scene.types import GeometrySpec, PolygonGeometrySpec, SceneObject, SpatialMaterialSpec
+
+    props = getattr(item, "props", {}) or {}
+    raw_vertices = props.get("vertices", ())
+    vertices = tuple((float(x), float(y)) for x, y in raw_vertices)
+    return SceneObject(
+        name=getattr(item, "name", ""),
+        geometry=GeometrySpec(
+            kind="polygon",
+            polygon=PolygonGeometrySpec(
+                vertices=vertices,
+                priority=int(props.get("priority", 0) or 0),
+                height=float(props.get("height", 0) or 0),
+                z=float(props.get("z", 0) or 0),
+            ),
+        ),
+        spatial_material=SpatialMaterialSpec(kind="uniform", medium_name=getattr(item, "material", "")),
+    )
+
+
+def _compile_scripted(_item):
+    raise ValueError("Scripted geometry must be expanded by the scene compiler.")
+
+
 def _ring_radii(obj, context, eval_required) -> tuple[float, float]:
     if obj.geometry.ring is None:
         raise ValueError(f"Geometry '{obj.name}': missing ring parameters.")
@@ -174,6 +199,27 @@ def _ring_to_shape(obj, eps_by_material, context, eval_required):
         Shape(kind="circle", center_x=center_x, center_y=center_y, radius=outer_radius, eps=outer_eps),
         Shape(kind="circle", center_x=center_x, center_y=center_y, radius=inner_radius, eps=inner_eps),
     )
+
+
+def _polygon_to_shape(obj, eps_by_material, context, eval_required):
+    from ..specs.simulation import Shape
+
+    if obj.geometry.polygon is None:
+        raise ValueError(f"Geometry '{obj.name}': missing polygon parameters.")
+    eps = _main_material_eps(obj, eps_by_material)
+    vertices = [(float(x), float(y)) for x, y in obj.geometry.polygon.vertices]
+    if len(vertices) < 3:
+        raise ValueError(f"Geometry '{obj.name}': polygon requires at least three vertices.")
+    return Shape(
+        kind="polygon",
+        vertices=vertices,
+        eps=eps,
+        priority=int(obj.geometry.polygon.priority),
+    )
+
+
+def _scripted_to_shape(*_args, **_kwargs):
+    raise ValueError("Scripted geometry must be expanded before runtime lowering.")
 
 
 def _emit_block_script(var_name: str, idx: int, obj) -> tuple[str, ...]:
@@ -242,6 +288,37 @@ def _emit_ring_script(var_name: str, idx: int, obj) -> tuple[str, ...]:
     )
 
 
+def _emit_polygon_script(var_name: str, idx: int, obj) -> tuple[str, ...]:
+    if obj.geometry.polygon is None:
+        raise ValueError(f"Geometry '{obj.name}': missing polygon parameters.")
+    vertices = obj.geometry.polygon.vertices
+    if len(vertices) < 3:
+        raise ValueError(f"Geometry '{obj.name}': polygon requires at least three vertices.")
+    name = f"{var_name}_shape_{idx}"
+    material = obj.spatial_material.medium_name
+    if not material:
+        raise ValueError(f"Geometry '{obj.name}': material is required.")
+    lines = [
+        f"if '{material}' not in materials:",
+        f"    raise ValueError(\"Geometry '{obj.name}': unknown material '{material}'.\")",
+        f"{name}_vertices = [",
+    ]
+    for x, y in vertices:
+        lines.append(f"    mp.Vector3({float(x)!r}, {float(y)!r}, 0),")
+    lines.extend(
+        [
+            "]",
+            f"{name} = mp.Prism(vertices={name}_vertices, height=mp.inf, material=materials['{material}'])",
+            f"{var_name}.append({name})",
+        ]
+    )
+    return tuple(lines)
+
+
+def _emit_scripted_script(*_args, **_kwargs):
+    raise ValueError("Scripted geometry must be expanded before script export.")
+
+
 def _build_block_mpb(obj, materials, mp, context, eval_required):
     if obj.geometry.block is None:
         raise ValueError(f"Geometry '{obj.name}': missing block parameters.")
@@ -296,6 +373,29 @@ def _build_ring_mpb(obj, materials, mp, context, eval_required):
     )
 
 
+def _build_polygon_mpb(obj, materials, mp, context, eval_required):
+    if obj.geometry.polygon is None:
+        raise ValueError(f"Geometry '{obj.name}': missing polygon parameters.")
+    medium = _main_material_object(obj, materials)
+    vertices = [
+        mp.Vector3(float(x), float(y), 0)
+        for x, y in obj.geometry.polygon.vertices
+    ]
+    if len(vertices) < 3:
+        raise ValueError(f"Geometry '{obj.name}': polygon requires at least three vertices.")
+    return mp.Prism(vertices=vertices, height=mp.inf, material=medium)
+
+
+def _build_scripted_mpb(*_args, **_kwargs):
+    raise ValueError("Scripted geometry must be expanded before MPB lowering.")
+
+
+def geometry_priority(obj) -> int:
+    if obj.geometry.polygon is not None:
+        return int(obj.geometry.polygon.priority)
+    return 0
+
+
 GEOMETRY_REGISTRY = {
     "circle": GeometryKindSpec(
         kind_id="circle",
@@ -338,6 +438,27 @@ GEOMETRY_REGISTRY = {
         to_shape=_block_to_shape,
         emit_script_object=_emit_block_script,
         build_mpb_object=_build_block_mpb,
+    ),
+    "polygon": GeometryKindSpec(
+        kind_id="polygon",
+        display_name="Polygon",
+        fields=(),
+        compile_scene_object=_compile_polygon,
+        to_shape=_polygon_to_shape,
+        emit_script_object=_emit_polygon_script,
+        build_mpb_object=_build_polygon_mpb,
+        editor_visible=False,
+    ),
+    "scripted": GeometryKindSpec(
+        kind_id="scripted",
+        display_name="Scripted",
+        fields=(
+            PrimitiveField("source", "Script", "", value_type="script"),
+        ),
+        compile_scene_object=_compile_scripted,
+        to_shape=_scripted_to_shape,
+        emit_script_object=_emit_scripted_script,
+        build_mpb_object=_build_scripted_mpb,
     ),
 }
 

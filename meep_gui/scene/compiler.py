@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..model import FIELD_COMPONENTS, ProjectState, normalize_domain
+from ..geometry_script import run_geometry_script
 from ..primitives import (
     DEFAULT_MATERIAL_KIND,
     DEFAULT_MONITOR_KIND,
@@ -16,7 +17,11 @@ from .types import (
     CompiledScene,
     DomainSpec,
     ParameterSpec,
+    GeometrySpec,
+    PolygonGeometrySpec,
     SceneSpec,
+    SceneObject,
+    SpatialMaterialSpec,
     SymmetrySpec,
     TransmissionSceneBundle,
 )
@@ -43,6 +48,7 @@ def compile_project_scene(
     scene = _compile_scene_spec(
         name="scattering",
         parameters=state.parameters,
+        context=context,
         domain=state.domain,
         materials=state.materials,
         geometries=state.geometries,
@@ -66,6 +72,7 @@ def compile_transmission_scenes(
         scene=_compile_scene_spec(
             name="scattering",
             parameters=state.parameters,
+            context=context,
             domain=state.domain,
             materials=state.materials,
             geometries=state.geometries,
@@ -79,6 +86,7 @@ def compile_transmission_scenes(
         scene=_compile_scene_spec(
             name="reference",
             parameters=state.parameters,
+            context=context,
             domain=reference_state.domain,
             materials=state.materials,
             geometries=reference_state.geometries,
@@ -94,6 +102,7 @@ def _compile_scene_spec(
     *,
     name: str,
     parameters,
+    context: CompilationContext,
     domain,
     materials,
     geometries,
@@ -113,7 +122,39 @@ def _compile_scene_spec(
     )
 
     scene_objects = []
+    material_names = {getattr(item, "name", "") for item in materials if getattr(item, "name", "")}
     for item in geometries:
+        if item.kind == "scripted":
+            source = str((getattr(item, "props", {}) or {}).get("source", ""))
+            try:
+                result = run_geometry_script(
+                    source,
+                    parameter_values=context.parameter_values,
+                    material_names=material_names,
+                    name_prefix=getattr(item, "name", "") or "scripted",
+                )
+            except Exception as exc:
+                raise ValueError(f"Geometry '{getattr(item, 'name', '')}': {exc}") from exc
+            for polygon in result.polygons:
+                scene_objects.append(
+                    SceneObject(
+                        name=polygon.name,
+                        geometry=GeometrySpec(
+                            kind="polygon",
+                            polygon=PolygonGeometrySpec(
+                                vertices=polygon.vertices,
+                                priority=polygon.priority,
+                                height=polygon.height,
+                                z=polygon.z,
+                            ),
+                        ),
+                        spatial_material=SpatialMaterialSpec(
+                            kind="uniform",
+                            medium_name=polygon.material,
+                        ),
+                    )
+                )
+            continue
         scene_objects.append(geometry_kind(item.kind).compile_scene_object(item))
 
     scene_sources = []

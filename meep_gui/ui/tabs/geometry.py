@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from PyQt5 import QtWidgets
 
+from ...geometry_script import validate_geometry_script
 from ...model import GeometryItem
 from ...primitives import GEOMETRY_REGISTRY, geometry_kind
 from ...store import ProjectStore
-from ...validation import validate_name, validate_numeric_expression
+from ...validation import evaluate_parameters, validate_name, validate_numeric_expression
 from ..common import (
     _log_error,
     _mark_row_warning,
@@ -20,6 +21,10 @@ from ..scope import active_scope, parameter_names
 
 def _material_names(store: ProjectStore) -> list[str]:
     return [mat.name for mat in store.state.materials if mat.name]
+
+
+def _editor_geometry_kinds() -> list[str]:
+    return [kind for kind, spec in GEOMETRY_REGISTRY.items() if spec.editor_visible]
 
 
 def _set_combo_items(
@@ -49,7 +54,7 @@ class GeometryTab(QtWidgets.QWidget):
 
         self.name_input = QtWidgets.QLineEdit()
         self.kind_input = QtWidgets.QComboBox()
-        self.kind_input.addItems(list(GEOMETRY_REGISTRY))
+        self.kind_input.addItems(_editor_geometry_kinds())
         self.material_input = QtWidgets.QComboBox()
         self.inner_material = QtWidgets.QComboBox()
         self.center_x = QtWidgets.QLineEdit()
@@ -58,6 +63,15 @@ class GeometryTab(QtWidgets.QWidget):
         self.size_y = QtWidgets.QLineEdit()
         self.radius = QtWidgets.QLineEdit()
         self.width = QtWidgets.QLineEdit()
+        self.script_source = QtWidgets.QPlainTextEdit()
+        self.script_source.setPlaceholderText("emit(rect(center=(0, 0), size=(1, 1)), material=materials[\"silicon\"])")
+        self.script_source.setMinimumHeight(160)
+        self.validate_script_button = QtWidgets.QPushButton("Validate / Generate")
+        self.script_summary = QtWidgets.QLabel("")
+        self.script_summary.setWordWrap(True)
+        self.script_errors = QtWidgets.QPlainTextEdit()
+        self.script_errors.setReadOnly(True)
+        self.script_errors.setMaximumHeight(90)
         self._prop_widgets = {
             "inner_material": self.inner_material,
             "center_x": self.center_x,
@@ -66,6 +80,7 @@ class GeometryTab(QtWidgets.QWidget):
             "size_y": self.size_y,
             "radius": self.radius,
             "width": self.width,
+            "source": self.script_source,
         }
 
         self.form_container = QtWidgets.QWidget()
@@ -80,6 +95,10 @@ class GeometryTab(QtWidgets.QWidget):
         self.form.addRow("Size Y", self.size_y)
         self.form.addRow("Radius", self.radius)
         self.form.addRow("Width", self.width)
+        self.form.addRow("Script", self.script_source)
+        self.form.addRow("", self.validate_script_button)
+        self.form.addRow("Summary", self.script_summary)
+        self.form.addRow("Errors", self.script_errors)
         self.form_scroll = _scroll_area_for(self.form_container)
 
         self.add_button = QtWidgets.QPushButton("Add")
@@ -103,6 +122,7 @@ class GeometryTab(QtWidgets.QWidget):
         layout.addWidget(self.table)
 
         self.kind_input.currentTextChanged.connect(self._sync_kind_fields)
+        self.validate_script_button.clicked.connect(self._on_validate_script)
         self.add_button.clicked.connect(self._on_add)
         self.update_button.clicked.connect(self._on_update)
         self.remove_button.clicked.connect(self._on_remove)
@@ -120,14 +140,21 @@ class GeometryTab(QtWidgets.QWidget):
 
     def _sync_kind_fields(self, kind: str) -> None:
         visible_fields = {field.field_id for field in geometry_kind(kind).fields}
+        scripted = kind == "scripted"
+        _set_form_row_visible(self.form, self.material_input, not scripted)
         for field_id, widget in self._prop_widgets.items():
             _set_form_row_visible(self.form, widget, field_id in visible_fields)
+        _set_form_row_visible(self.form, self.validate_script_button, scripted)
+        _set_form_row_visible(self.form, self.script_summary, scripted)
+        _set_form_row_visible(self.form, self.script_errors, scripted)
         _refresh_scroll_area(self.form_scroll)
 
     def _field_value(self, field_id: str) -> str:
         widget = self._prop_widgets[field_id]
         if isinstance(widget, QtWidgets.QComboBox):
             return widget.currentText().strip()
+        if isinstance(widget, QtWidgets.QPlainTextEdit):
+            return widget.toPlainText()
         return widget.text().strip()
 
     def _set_field_value(self, field_id: str, value: str) -> None:
@@ -136,8 +163,49 @@ class GeometryTab(QtWidgets.QWidget):
             if value and widget.findText(value) < 0:
                 widget.addItem(value)
             widget.setCurrentText(value)
+        elif isinstance(widget, QtWidgets.QPlainTextEdit):
+            widget.setPlainText(value)
         else:
             widget.setText(value)
+
+    def _validate_script_source(self, source: str):
+        values, results = evaluate_parameters(self.store.state.parameters)
+        for result in results:
+            if not result.ok:
+                return None, f"Parameter '{result.name}': {result.message}"
+        validation = validate_geometry_script(
+            source,
+            parameter_values=values,
+            material_names=set(_material_names(self.store)),
+            name_prefix=self.name_input.text().strip() or "scripted",
+        )
+        if not validation.ok:
+            return validation, validation.errors[0] if validation.errors else "Invalid geometry script."
+        return validation, ""
+
+    def _update_script_summary(self, validation) -> None:
+        if validation is None:
+            self.script_summary.setText("")
+            return
+        deps = []
+        if validation.referenced_parameters:
+            deps.append("params: " + ", ".join(validation.referenced_parameters))
+        if validation.referenced_materials:
+            deps.append("materials: " + ", ".join(validation.referenced_materials))
+        dep_text = "; ".join(deps) if deps else "no dependencies"
+        self.script_summary.setText(
+            f"{validation.emitted_count} generated polygons, "
+            f"{validation.vertex_count} vertices; {dep_text}"
+        )
+
+    def _on_validate_script(self) -> bool:
+        validation, error = self._validate_script_source(self.script_source.toPlainText())
+        self._update_script_summary(validation)
+        self.script_errors.setPlainText(error)
+        if error:
+            self.store.log_message(error)
+            return False
+        return True
 
     def _validate(self, name: str, kind: str, material: str, row: int) -> bool:
         scope = active_scope(self.store)
@@ -151,6 +219,23 @@ class GeometryTab(QtWidgets.QWidget):
         if not name_result.ok:
             _log_error(self.store, name_result.message, self)
             return False
+
+        if kind == "scripted":
+            source = self._field_value("source").strip()
+            _set_invalid(self.script_source, not source)
+            if not source:
+                _log_error(self.store, "Script source is required.", self)
+                return False
+            validation, error = self._validate_script_source(source)
+            self._update_script_summary(validation)
+            self.script_errors.setPlainText(error)
+            if error:
+                _set_invalid(self.script_source, True)
+                _log_error(self.store, error, self)
+                return False
+            _set_invalid(self.script_source, False)
+            _set_invalid(self.material_input, False)
+            return True
 
         if not material:
             _set_invalid(self.material_input, True)
@@ -192,7 +277,7 @@ class GeometryTab(QtWidgets.QWidget):
     def _on_add(self) -> None:
         name = self.name_input.text().strip()
         kind = self.kind_input.currentText()
-        material = self.material_input.currentText().strip()
+        material = "" if kind == "scripted" else self.material_input.currentText().strip()
         geometries = active_scope(self.store).geometries
         row = len(geometries)
         if not self._validate(name, kind, material, row):
@@ -263,22 +348,31 @@ class GeometryTab(QtWidgets.QWidget):
             self.table.insertRow(row)
             self.table.setItem(row, 0, QtWidgets.QTableWidgetItem(geo.name))
             self.table.setItem(row, 1, QtWidgets.QTableWidgetItem(geo.kind))
-            self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(geo.material))
+            self.table.setItem(
+                row,
+                2,
+                QtWidgets.QTableWidgetItem("generated" if geo.kind == "scripted" else geo.material),
+            )
             message = ""
-            for field in geometry_kind(geo.kind).fields:
-                value = geo.props.get(field.field_id, "")
-                if field.value_type == "material":
-                    if not value:
-                        message = f"Geometry '{geo.name}': {field.label} is required."
+            if geo.kind == "scripted":
+                validation, error = self._validate_script_source(str(geo.props.get("source", "")))
+                if error:
+                    message = f"Geometry '{geo.name}': {error}"
+            else:
+                for field in geometry_kind(geo.kind).fields:
+                    value = geo.props.get(field.field_id, "")
+                    if field.value_type == "material":
+                        if not value:
+                            message = f"Geometry '{geo.name}': {field.label} is required."
+                            break
+                        if value not in materials:
+                            message = f"Geometry '{geo.name}': unknown {field.label.lower()} '{value}'."
+                            break
+                        continue
+                    result = validate_numeric_expression(value, allowed)
+                    if not result.ok:
+                        message = f"Geometry '{geo.name}': {field.field_id} {result.message}"
                         break
-                    if value not in materials:
-                        message = f"Geometry '{geo.name}': unknown {field.label.lower()} '{value}'."
-                        break
-                    continue
-                result = validate_numeric_expression(value, allowed)
-                if not result.ok:
-                    message = f"Geometry '{geo.name}': {field.field_id} {result.message}"
-                    break
             if message:
                 key = geo.name or f"row-{row}"
                 invalid[key] = message

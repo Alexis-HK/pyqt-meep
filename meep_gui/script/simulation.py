@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..primitives import geometry_kind, material_kind, monitor_kind, source_kind
+from ..primitives import geometry_kind, geometry_priority, material_kind, monitor_kind, source_kind
 from ..validation import parse_complex_literal
 from .common import line
 
@@ -30,7 +30,11 @@ def emit_materials(lines: list[str], scene) -> None:
 
 def emit_geometry(lines: list[str], var_name: str, objects) -> None:
     line(lines, f"{var_name} = []")
-    for idx, obj in enumerate(objects, start=1):
+    ordered_objects = sorted(
+        enumerate(objects),
+        key=lambda item: (geometry_priority(item[1]), item[0]),
+    )
+    for idx, (_order, obj) in enumerate(ordered_objects, start=1):
         for statement in geometry_kind(obj.geometry.kind).emit_script_object(var_name, idx, obj):
             line(lines, statement)
 

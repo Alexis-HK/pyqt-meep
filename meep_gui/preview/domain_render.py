@@ -304,6 +304,14 @@ def _render_mpb_preview(
                     material=material,
                 )
             )
+        elif shape.kind == "polygon":
+            geometry.append(
+                mp.Prism(
+                    vertices=[mp.Vector3(x, y, 0) for x, y in shape.vertices],
+                    height=mp.inf,
+                    material=material,
+                )
+            )
 
     k_points = []
     if cfg.kpoints:

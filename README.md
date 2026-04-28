@@ -18,7 +18,7 @@ For now, the application can be run by first creating a Conda environment (the m
 conda create --name meep-gui --override-channels -c conda-forge python=3.12
 conda activate meep-gui
 conda install --override-channels -c conda-forge \
-  pymeep mpb pyqt numpy matplotlib pyyaml ffmpeg \
+  pymeep mpb pyqt numpy matplotlib pyyaml shapely ffmpeg \
   gstreamer gst-plugins-base gst-plugins-good gst-libav
 ```
 
@@ -34,4 +34,3 @@ This arose from a research tool, and the application is still in its early phase
 - GDS import and more geometry primitives (provided by builtin Meep functions)
 - Executables from PyInstaller for MacOS and certain Linux distros
 - Analysis type of a waveguide cross section which computes band structures, fields, etc
-
