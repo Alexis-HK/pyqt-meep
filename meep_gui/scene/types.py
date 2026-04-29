@@ -82,12 +82,18 @@ class PolygonGeometrySpec:
 
 
 @dataclass(frozen=True)
+class ScriptedGeometrySpec:
+    source: str
+
+
+@dataclass(frozen=True)
 class GeometrySpec:
     kind: GeometryKind
     block: BlockGeometrySpec | None = None
     circle: CircleGeometrySpec | None = None
     ring: RingGeometrySpec | None = None
     polygon: PolygonGeometrySpec | None = None
+    scripted: ScriptedGeometrySpec | None = None
 
 
 @dataclass(frozen=True)

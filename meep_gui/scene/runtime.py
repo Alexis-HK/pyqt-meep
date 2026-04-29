@@ -85,7 +85,7 @@ def scene_to_sim_params(scene: SceneSpec, context: CompilationContext) -> SimPar
             else 0.0
         ),
         symmetries=symmetries,
-        shapes=shapes,
+        shapes=sorted(shapes, key=lambda item: item.priority),
         sources=sources,
     )
 

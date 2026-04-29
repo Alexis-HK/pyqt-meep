@@ -142,6 +142,78 @@ def test_field_animation_script_emits_ring_geometry() -> None:
     assert "geometry.append(geometry_shape_1_inner)" in code
 
 
+def test_scripted_geometry_script_preserves_source_and_parameterization() -> None:
+    pytest.importorskip("shapely")
+    state = ProjectState(
+        parameters=[Parameter(name="r", expr="0.5")],
+        materials=[Material(name="si", index_expr="3")],
+        geometries=[
+            GeometryItem(
+                name="disk",
+                kind="scripted",
+                material="",
+                props={
+                    "source": (
+                        'g = region("x*x + y*y < r*r", bounds=(-1, -1, 1, 1), resolution=24)\n'
+                        'emit(g, material=materials["si"])'
+                    )
+                },
+            )
+        ],
+        analysis=AnalysisConfig(kind="field_animation"),
+    )
+
+    code = generate_script(state)
+
+    assert "import math" in code
+    assert "from shapely.geometry import Polygon as _ShapelyPolygon" in code
+    assert "def _build_geometry_scripted_1(" in code
+    assert 'g = region("x*x + y*y < r*r", bounds=(-1, -1, 1, 1), resolution=24)' in code
+    assert "parameter_values=parameter_values" in code
+    assert "params = dict(parameter_values)" in code
+    assert "geometry_shape_1_vertices = [" not in code
+
+
+def test_scripted_geometry_helpers_are_omitted_when_unused() -> None:
+    code = generate_script(ProjectState(analysis=AnalysisConfig(kind="field_animation")))
+
+    assert "from shapely" not in code
+    assert "_build_geometry_scripted" not in code
+
+
+def test_scripted_geometry_sweep_export_rebuilds_after_overrides() -> None:
+    pytest.importorskip("shapely")
+    state = ProjectState(
+        parameters=[Parameter(name="w", expr="1")],
+        materials=[Material(name="si", index_expr="3")],
+        geometries=[
+            GeometryItem(
+                name="bar",
+                kind="scripted",
+                material="",
+                props={
+                    "source": (
+                        'g = rect(center=(0, 0), size=(params["w"], 1))\n'
+                        'emit(g, material=materials["si"])'
+                    )
+                },
+            )
+        ],
+        analysis=AnalysisConfig(kind="field_animation"),
+        sweep=SweepConfig(
+            enabled=True,
+            params=[SweepParameter(name="w", start="1", stop="2", steps="1")],
+        ),
+    )
+
+    code = generate_script(state)
+
+    assert "parameter_values = _build_parameter_values(overrides)" in code
+    assert 'g = rect(center=(0, 0), size=(params["w"], 1))' in code
+    assert "def _build_geometry_scripted_1(target=geometry, parameter_values=parameter_values" in code
+    assert "run_analysis(run_dir, overrides={name: value})" in code
+
+
 def test_gaussian_beam_script_defines_disabled_temporal_source_without_appending() -> None:
     state = ProjectState(
         parameters=[Parameter(name="amp", expr="2")],
@@ -478,6 +550,35 @@ def test_mpb_script_includes_te_tm_field_and_tutorial_epsilon_plot() -> None:
     assert "domain_preview.png" not in code
 
 
+def test_mpb_script_preserves_scripted_geometry_source() -> None:
+    pytest.importorskip("shapely")
+    state = ProjectState(
+        materials=[Material(name="si", index_expr="3")],
+        geometries=[
+            GeometryItem(
+                name="cell",
+                kind="scripted",
+                material="",
+                props={
+                    "source": (
+                        'g = rect(center=(0, 0), size=(params["a"], 0.5))\n'
+                        'emit(g, material=materials["si"])'
+                    )
+                },
+            )
+        ],
+        parameters=[Parameter(name="a", expr="1")],
+        analysis=AnalysisConfig(kind="mpb_modesolver"),
+    )
+
+    code = generate_script(state)
+
+    assert "from shapely.geometry import Polygon as _ShapelyPolygon" in code
+    assert "def _build_geometry_scripted_1(" in code
+    assert 'g = rect(center=(0, 0), size=(params["a"], 0.5))' in code
+    assert "geometry_shape_1_vertices = [" not in code
+
+
 def test_mpb_script_skips_field_image_fallback_when_no_field_kpoints() -> None:
     state = ProjectState(
         analysis=AnalysisConfig(
@@ -574,6 +675,71 @@ def test_transmission_script_uses_split_reference_and_scattering_state() -> None
     assert "if len(freqs) != len(ref_freqs):" in code
     assert "if abs(float(f_dev) - float(f_ref)) > 1e-12:" in code
     assert "k_point=" not in code
+
+
+def test_transmission_script_preserves_scripted_geometry_for_both_domains() -> None:
+    pytest.importorskip("shapely")
+    state = ProjectState(
+        materials=[Material(name="si", index_expr="3")],
+        geometries=[
+            GeometryItem(
+                name="dev_bar",
+                kind="scripted",
+                material="",
+                props={
+                    "source": (
+                        'g = rect(center=(0, 0), size=(params["w"], 1))\n'
+                        'emit(g, material=materials["si"])'
+                    )
+                },
+            )
+        ],
+        parameters=[Parameter(name="w", expr="1")],
+        sources=[
+            SourceItem(name="dev_src", kind="gaussian", component="Ez", props={"fcen": "0.2", "df": "0.1"})
+        ],
+        flux_monitors=[FluxMonitorConfig(name="dev_tx")],
+        analysis=AnalysisConfig(
+            kind="transmission_spectrum",
+            transmission_spectrum=TransmissionSpectrumConfig(
+                incident_monitor="ref_inc",
+                transmission_monitor="dev_tx",
+                reference_state=TransmissionDomainState(
+                    geometries=[
+                        GeometryItem(
+                            name="ref_bar",
+                            kind="scripted",
+                            material="",
+                            props={
+                                "source": (
+                                    'g = rect(center=(0, 0), size=(params["w"], 0.5))\n'
+                                    'emit(g, material=materials["si"])'
+                                )
+                            },
+                        )
+                    ],
+                    sources=[
+                        SourceItem(
+                            name="ref_src",
+                            kind="gaussian",
+                            component="Ez",
+                            props={"fcen": "0.2", "df": "0.1"},
+                        )
+                    ],
+                    flux_monitors=[FluxMonitorConfig(name="ref_inc")],
+                ),
+            ),
+        ),
+    )
+
+    code = generate_script(state)
+
+    assert "def _build_geometry_scripted_1(" in code
+    assert "def _build_ref_geometry_scripted_1(" in code
+    assert 'g = rect(center=(0, 0), size=(params["w"], 1))' in code
+    assert 'g = rect(center=(0, 0), size=(params["w"], 0.5))' in code
+    assert "geometry_shape_1_vertices = [" not in code
+    assert "ref_geometry_shape_1_vertices = [" not in code
 
 
 def test_transmission_script_emits_k_point_for_reference_and_scattering_domains() -> None:

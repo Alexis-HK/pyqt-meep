@@ -132,7 +132,7 @@ def _compile_polygon(item):
 
 
 def _compile_scripted(_item):
-    raise ValueError("Scripted geometry must be expanded by the scene compiler.")
+    raise ValueError("Scripted geometry must be preserved by the scene compiler.")
 
 
 def _ring_radii(obj, context, eval_required) -> tuple[float, float]:
@@ -218,8 +218,39 @@ def _polygon_to_shape(obj, eps_by_material, context, eval_required):
     )
 
 
-def _scripted_to_shape(*_args, **_kwargs):
-    raise ValueError("Scripted geometry must be expanded before runtime lowering.")
+def _run_scripted_geometry(obj, context, material_names):
+    from ..geometry_script import run_geometry_script
+
+    if obj.geometry.scripted is None:
+        raise ValueError(f"Geometry '{obj.name}': missing scripted source.")
+    try:
+        return run_geometry_script(
+            obj.geometry.scripted.source,
+            parameter_values=context.parameter_values,
+            material_names=set(material_names),
+            name_prefix=obj.name or "scripted",
+        )
+    except Exception as exc:
+        raise ValueError(f"Geometry '{obj.name}': {exc}") from exc
+
+
+def _scripted_to_shape(obj, eps_by_material, context, _eval_required):
+    from ..specs.simulation import Shape
+
+    if not isinstance(eps_by_material, dict):
+        raise ValueError(f"Geometry '{obj.name}': scripted geometry requires named materials.")
+    result = _run_scripted_geometry(obj, context, eps_by_material)
+    shapes = []
+    for polygon in result.polygons:
+        shapes.append(
+            Shape(
+                kind="polygon",
+                vertices=[(float(x), float(y)) for x, y in polygon.vertices],
+                eps=_material_eps(obj, eps_by_material, polygon.material, "material"),
+                priority=int(polygon.priority),
+            )
+        )
+    return shapes
 
 
 def _emit_block_script(var_name: str, idx: int, obj) -> tuple[str, ...]:
@@ -315,8 +346,58 @@ def _emit_polygon_script(var_name: str, idx: int, obj) -> tuple[str, ...]:
     return tuple(lines)
 
 
-def _emit_scripted_script(*_args, **_kwargs):
-    raise ValueError("Scripted geometry must be expanded before script export.")
+def _emit_scripted_script(var_name: str, idx: int, obj) -> tuple[str, ...]:
+    if obj.geometry.scripted is None:
+        raise ValueError(f"Geometry '{obj.name}': missing scripted source.")
+    helper_name = f"_build_{var_name}_scripted_{idx}"
+    source = obj.geometry.scripted.source
+    lines = [
+        f"def {helper_name}(target={var_name}, parameter_values=parameter_values, material_map=materials):",
+        "    params = dict(parameter_values)",
+        "    materials = _ScriptedMaterials(material_map)",
+        "    records = []",
+        "",
+        "    def emit(g, *, material, height=0, z=0, priority=0):",
+        "        if not isinstance(material, _ScriptedMaterialRef):",
+        "            raise ValueError('emit material must be materials[\"name\"].')",
+        "        records.append((g, material.name, material.material, float(height), float(z), int(priority)))",
+        "",
+        "    pi = _scripted_pi",
+        "    rect = _scripted_rect",
+        "    circle = _scripted_circle",
+        "    ellipse = _scripted_ellipse",
+        "    polygon = _scripted_polygon",
+        "    path = _scripted_path",
+        "    union = _scripted_union",
+        "    difference = _scripted_difference",
+        "    intersection = _scripted_intersection",
+        "    move = _scripted_move",
+        "    rotate = _scripted_rotate",
+        "    scale = _scripted_scale",
+        "    mirror_x = _scripted_mirror_x",
+        "    mirror_y = _scripted_mirror_y",
+        "    clean = _scripted_clean",
+        "    simplify = _scripted_simplify",
+        "    linspace = _scripted_linspace",
+        "    reverse = _scripted_reverse",
+        "    range = _scripted_range",
+        "    region = lambda expr, *, bounds, resolution=256: _scripted_region(",
+        "        expr, parameter_values=parameter_values, bounds=bounds, resolution=resolution",
+        "    )",
+        "",
+        "    # Original scripted geometry source",
+    ]
+    for text in source.splitlines() or [""]:
+        lines.append(f"    {text}" if text else "")
+    lines.extend(
+        [
+            "",
+            "    _append_scripted_records(target, records)",
+            "",
+            f"{helper_name}()",
+        ]
+    )
+    return tuple(lines)
 
 
 def _build_block_mpb(obj, materials, mp, context, eval_required):
@@ -386,8 +467,21 @@ def _build_polygon_mpb(obj, materials, mp, context, eval_required):
     return mp.Prism(vertices=vertices, height=mp.inf, material=medium)
 
 
-def _build_scripted_mpb(*_args, **_kwargs):
-    raise ValueError("Scripted geometry must be expanded before MPB lowering.")
+def _build_scripted_mpb(obj, materials, mp, context, _eval_required):
+    if not isinstance(materials, dict):
+        raise ValueError(f"Geometry '{obj.name}': scripted geometry requires named materials.")
+    result = _run_scripted_geometry(obj, context, materials)
+    geometry = []
+    for polygon in result.polygons:
+        medium = _material_object(obj, materials, polygon.material, "material")
+        vertices = [
+            mp.Vector3(float(x), float(y), 0)
+            for x, y in polygon.vertices
+        ]
+        if len(vertices) < 3:
+            raise ValueError(f"Geometry '{obj.name}': polygon requires at least three vertices.")
+        geometry.append(mp.Prism(vertices=vertices, height=mp.inf, material=medium))
+    return geometry
 
 
 def geometry_priority(obj) -> int:

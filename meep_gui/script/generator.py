@@ -14,8 +14,10 @@ from .domain_preview import emit_domain_preview_call, emit_domain_preview_helper
 from .simulation import (
     emit_geometry,
     emit_materials,
+    emit_scripted_geometry_helpers,
     emit_sources,
     emit_symmetries,
+    scene_uses_scripted_geometry,
     simulation_cylindrical_kwargs,
     simulation_k_point_expr,
 )
@@ -25,11 +27,23 @@ def _emit_header(lines: list[str], plan: ScriptPlan) -> None:
     line(lines, "from math import sqrt, exp, sin, cos, tan, log, log10")
     line(lines, "import csv")
     line(lines, "import os")
+    if _plan_uses_scripted_geometry(plan):
+        line(lines, "import math")
     if _plan_uses_cmath(plan):
         line(lines, "import cmath")
     line(lines, "import meep as mp")
     if plan.backend == "mpb":
         line(lines, "from meep import mpb")
+    if _plan_uses_scripted_geometry(plan):
+        line(lines, "from shapely.affinity import rotate as _shapely_rotate")
+        line(lines, "from shapely.affinity import scale as _shapely_scale")
+        line(lines, "from shapely.affinity import translate as _shapely_translate")
+        line(lines, "from shapely.geometry import GeometryCollection as _ShapelyGeometryCollection")
+        line(lines, "from shapely.geometry import LineString as _ShapelyLineString")
+        line(lines, "from shapely.geometry import Polygon as _ShapelyPolygon")
+        line(lines, "from shapely.geometry import box as _shapely_box")
+        line(lines, "from shapely.ops import triangulate as _shapely_triangulate")
+        line(lines, "from shapely.ops import unary_union as _shapely_unary_union")
     line(lines)
     line(lines, "script_dir = os.path.dirname(os.path.abspath(__file__))")
     line(lines)
@@ -49,6 +63,10 @@ def _plan_uses_cmath(plan: ScriptPlan) -> bool:
         for scene in _iter_plan_scenes(plan)
         for source in scene.sources
     )
+
+
+def _plan_uses_scripted_geometry(plan: ScriptPlan) -> bool:
+    return any(scene_uses_scripted_geometry(scene) for scene in _iter_plan_scenes(plan))
 
 
 def _primary_scene(plan: ScriptPlan):
@@ -157,6 +175,7 @@ def _emit_runtime_helpers(
     scene,
     *,
     include_sweep_helpers: bool,
+    include_scripted_geometry_helpers: bool,
 ) -> None:
     params = _parameter_specs(scene)
 
@@ -181,6 +200,9 @@ def _emit_runtime_helpers(
             line(lines, text)
     line(lines, "    return parameter_values")
     line(lines)
+
+    if include_scripted_geometry_helpers:
+        emit_scripted_geometry_helpers(lines)
 
     if not include_sweep_helpers:
         return
@@ -392,7 +414,12 @@ def generate_script(state: ProjectState, log: LogFn | None = None) -> str:
 
     lines: list[str] = []
     _emit_header(lines, prepared.plan)
-    _emit_runtime_helpers(lines, scene, include_sweep_helpers=sweep_enabled)
+    _emit_runtime_helpers(
+        lines,
+        scene,
+        include_sweep_helpers=sweep_enabled,
+        include_scripted_geometry_helpers=_plan_uses_scripted_geometry(prepared.plan),
+    )
     if prepared.plan.backend == "meep_fdtd":
         emit_domain_preview_helpers(lines)
     _emit_run_function(lines, _build_analysis_body(state, prepared, scene))

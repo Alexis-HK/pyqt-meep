@@ -205,8 +205,11 @@ def test_scripted_geometry_participates_in_scene_runtime_persistence_and_export(
     code = generate_script(round_tripped)
 
     assert round_tripped.geometries[0].kind == "scripted"
-    assert compiled.scene.objects[0].geometry.kind == "polygon"
+    assert compiled.scene.objects[0].geometry.kind == "scripted"
     assert params.shapes[0].kind == "polygon"
     assert mpb_geometry[0]["kind"] == "Prism"
     assert "mp.Prism" in code
-    assert "region(" not in code
+    assert "from shapely.geometry import Polygon as _ShapelyPolygon" in code
+    assert 'g = region("x*x + y*y < r*r", bounds=(-1, -1, 1, 1), resolution=24)' in code
+    assert "geometry_shape_1_vertices = [" not in code
+    assert "parameter_values=parameter_values" in code

@@ -18,9 +18,9 @@ from .types import (
     DomainSpec,
     ParameterSpec,
     GeometrySpec,
-    PolygonGeometrySpec,
     SceneSpec,
     SceneObject,
+    ScriptedGeometrySpec,
     SpatialMaterialSpec,
     SymmetrySpec,
     TransmissionSceneBundle,
@@ -127,7 +127,7 @@ def _compile_scene_spec(
         if item.kind == "scripted":
             source = str((getattr(item, "props", {}) or {}).get("source", ""))
             try:
-                result = run_geometry_script(
+                run_geometry_script(
                     source,
                     parameter_values=context.parameter_values,
                     material_names=material_names,
@@ -135,25 +135,16 @@ def _compile_scene_spec(
                 )
             except Exception as exc:
                 raise ValueError(f"Geometry '{getattr(item, 'name', '')}': {exc}") from exc
-            for polygon in result.polygons:
-                scene_objects.append(
-                    SceneObject(
-                        name=polygon.name,
-                        geometry=GeometrySpec(
-                            kind="polygon",
-                            polygon=PolygonGeometrySpec(
-                                vertices=polygon.vertices,
-                                priority=polygon.priority,
-                                height=polygon.height,
-                                z=polygon.z,
-                            ),
-                        ),
-                        spatial_material=SpatialMaterialSpec(
-                            kind="uniform",
-                            medium_name=polygon.material,
-                        ),
-                    )
+            scene_objects.append(
+                SceneObject(
+                    name=getattr(item, "name", "") or "scripted",
+                    geometry=GeometrySpec(
+                        kind="scripted",
+                        scripted=ScriptedGeometrySpec(source=source),
+                    ),
+                    spatial_material=SpatialMaterialSpec(kind="uniform", medium_name=""),
                 )
+            )
             continue
         scene_objects.append(geometry_kind(item.kind).compile_scene_object(item))
 
