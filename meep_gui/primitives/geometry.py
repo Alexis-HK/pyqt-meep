@@ -229,6 +229,7 @@ def _run_scripted_geometry(obj, context, material_names):
             parameter_values=context.parameter_values,
             material_names=set(material_names),
             name_prefix=obj.name or "scripted",
+            rng=context.rng,
         )
     except Exception as exc:
         raise ValueError(f"Geometry '{obj.name}': {exc}") from exc
@@ -352,7 +353,7 @@ def _emit_scripted_script(var_name: str, idx: int, obj) -> tuple[str, ...]:
     helper_name = f"_build_{var_name}_scripted_{idx}"
     source = obj.geometry.scripted.source
     lines = [
-        f"def {helper_name}(target={var_name}, parameter_values=parameter_values, material_map=materials):",
+        f"def {helper_name}(target={var_name}, parameter_values=parameter_values, material_map=materials, rng=_rng):",
         "    params = dict(parameter_values)",
         "    materials = _ScriptedMaterials(material_map)",
         "    records = []",
@@ -381,8 +382,10 @@ def _emit_scripted_script(var_name: str, idx: int, obj) -> tuple[str, ...]:
         "    linspace = _scripted_linspace",
         "    reverse = _scripted_reverse",
         "    range = _scripted_range",
+        "    uniform = rng.uniform",
+        "    gauss = rng.gauss",
         "    region = lambda expr, *, bounds, resolution=256: _scripted_region(",
-        "        expr, parameter_values=parameter_values, bounds=bounds, resolution=resolution",
+        "        expr, parameter_values=parameter_values, bounds=bounds, resolution=resolution, rng=rng",
         "    )",
         "",
         "    # Original scripted geometry source",

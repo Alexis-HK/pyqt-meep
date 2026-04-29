@@ -5,6 +5,7 @@ from PyQt5 import QtWidgets
 from ...model import AnalysisConfig, FIELD_COMPONENTS, FrequencyDomainSolverConfig
 from ...store import ProjectStore
 from ...validation import (
+    build_project_rng,
     evaluate_numeric_expression,
     evaluate_parameters,
     validate_numeric_expression,
@@ -69,13 +70,14 @@ class FrequencyDomainPanel(QtWidgets.QWidget):
         if not ok:
             return False
 
-        values, results = evaluate_parameters(self.store.state.parameters)
+        rng = build_project_rng(self.store.state.parameters, self.store.state.random_seed)
+        values, results = evaluate_parameters(self.store.state.parameters, rng=rng)
         for result in results:
             if not result.ok:
                 _log_error(self.store, f"Parameter '{result.name}': {result.message}", self)
                 return False
 
-        tolerance_value = evaluate_numeric_expression(self.tolerance.text().strip(), values)
+        tolerance_value = evaluate_numeric_expression(self.tolerance.text().strip(), values, rng=rng)
         tolerance_ok = tolerance_value > 0
         _set_invalid(self.tolerance, not tolerance_ok)
         if not tolerance_ok:
@@ -86,7 +88,7 @@ class FrequencyDomainPanel(QtWidgets.QWidget):
             (self.max_iters, "Max Iters"),
             (self.bicgstab_l, "L"),
         ):
-            value = evaluate_numeric_expression(widget.text().strip(), values)
+            value = evaluate_numeric_expression(widget.text().strip(), values, rng=rng)
             is_integer = abs(value - round(value)) <= 1e-9 and round(value) > 0
             _set_invalid(widget, not is_integer)
             if not is_integer:

@@ -23,14 +23,19 @@ def run_harminv_impl(
     state = copy.deepcopy(state)
     cfg = state.analysis.harminv
 
-    values, results = deps.evaluate_parameters(state.parameters)
+    values, results, rng = deps._evaluate_project_parameters(state)
     for result in results:
         if not result.ok:
             raise ValueError(f"Parameter '{result.name}': {result.message}")
 
-    until_after_sources = deps._eval_required(cfg.until_after_sources, values, "until_after_sources")
-    interval = deps._eval_required(cfg.animation_interval, values, "animation_interval")
-    fps = int(deps._eval_required(cfg.animation_fps, values, "animation_fps"))
+    until_after_sources = deps._eval_required(
+        cfg.until_after_sources,
+        values,
+        "until_after_sources",
+        rng=rng,
+    )
+    interval = deps._eval_required(cfg.animation_interval, values, "animation_interval", rng=rng)
+    fps = int(deps._eval_required(cfg.animation_fps, values, "animation_fps", rng=rng))
 
     output_dir = cfg.output_dir.strip()
     output_name = cfg.output_name.strip() or "harminv_animation.mp4"
@@ -40,8 +45,8 @@ def run_harminv_impl(
     output_path = os.path.join(temp_dir, output_name)
     temp_harminv_txt = os.path.join(temp_dir, "harminv.txt")
 
-    params = deps._build_sim_params(state)
-    flux_specs = deps._build_flux_specs(state, values)
+    params = deps._build_sim_params(state, values, rng=rng)
+    flux_specs = deps._build_flux_specs(state, values, rng=rng)
 
     mp = deps._import_meep()
 
@@ -55,10 +60,10 @@ def run_harminv_impl(
 
     hspec = deps.HarminvSpec(
         component=cfg.component,
-        center_x=deps._eval_required(cfg.point_x, values, "point_x"),
-        center_y=deps._eval_required(cfg.point_y, values, "point_y"),
-        frequency=deps._eval_required(cfg.fcen, values, "fcen"),
-        bandwidth=deps._eval_required(cfg.df, values, "df"),
+        center_x=deps._eval_required(cfg.point_x, values, "point_x", rng=rng),
+        center_y=deps._eval_required(cfg.point_y, values, "point_y", rng=rng),
+        frequency=deps._eval_required(cfg.fcen, values, "fcen", rng=rng),
+        bandwidth=deps._eval_required(cfg.df, values, "df", rng=rng),
     )
 
     harminv_lines: list[str] = []

@@ -23,14 +23,14 @@ def run_field_animation_impl(
     state = copy.deepcopy(state)
     cfg = state.analysis.field_animation
 
-    values, results = deps.evaluate_parameters(state.parameters)
+    values, results, rng = deps._evaluate_project_parameters(state)
     for result in results:
         if not result.ok:
             raise ValueError(f"Parameter '{result.name}': {result.message}")
 
-    duration = deps._eval_required(cfg.duration, values, "duration")
-    interval = deps._eval_required(cfg.interval, values, "interval")
-    fps = int(deps._eval_required(cfg.fps, values, "fps"))
+    duration = deps._eval_required(cfg.duration, values, "duration", rng=rng)
+    interval = deps._eval_required(cfg.interval, values, "interval", rng=rng)
+    fps = int(deps._eval_required(cfg.fps, values, "fps", rng=rng))
 
     output_dir = cfg.output_dir.strip()
     output_name = cfg.output_name.strip() or "animation.mp4"
@@ -38,8 +38,8 @@ def run_field_animation_impl(
     temp_dir = create_run_output_dir("meep_gui_field_")
     output_path = os.path.join(temp_dir, output_name)
 
-    params = deps._build_sim_params(state)
-    flux_specs = deps._build_flux_specs(state, values)
+    params = deps._build_sim_params(state, values, rng=rng)
+    flux_specs = deps._build_flux_specs(state, values, rng=rng)
 
     mp = deps._import_meep()
 

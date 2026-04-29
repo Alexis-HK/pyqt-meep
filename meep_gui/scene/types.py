@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import random
 from typing import Literal
 
 MediumKind = Literal["constant", "lossy_narrowband", "dispersive", "nonlinear", "magnetic"]
@@ -241,6 +242,8 @@ class SceneSpec:
 @dataclass(frozen=True)
 class CompilationContext:
     parameter_values: dict[str, float] = field(default_factory=dict)
+    rng: random.Random = field(default_factory=random.Random)
+    random_seed_expr: str = ""
 
 
 @dataclass(frozen=True)

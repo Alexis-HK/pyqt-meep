@@ -6,7 +6,7 @@ from PyQt5 import QtWidgets
 
 from ...model import PML_MODES, SymmetryItem
 from ...store import ProjectStore
-from ...validation import validate_numeric_expression
+from ...validation import evaluate_random_seed_expression, validate_numeric_expression
 from ..common import (
     _log_error,
     _refresh_scroll_area,
@@ -27,6 +27,7 @@ class DomainTab(QtWidgets.QWidget):
         self.cell_y = QtWidgets.QLineEdit()
         self.resolution = QtWidgets.QLineEdit()
         self.pml_width = QtWidgets.QLineEdit()
+        self.random_seed = QtWidgets.QLineEdit()
         self.pml_mode = QtWidgets.QComboBox()
         self.pml_mode.addItems(list(PML_MODES))
         self.periodic_enabled = QtWidgets.QCheckBox("Periodic Boundary (use k_point)")
@@ -61,6 +62,7 @@ class DomainTab(QtWidgets.QWidget):
         self.domain_form.addRow("Cell Y", self.cell_y)
         self.domain_form.addRow("Resolution", self.resolution)
         self.domain_form.addRow("PML Width", self.pml_width)
+        self.domain_form.addRow("Random Seed", self.random_seed)
         self.domain_form.addRow("PML Mode", self.pml_mode)
         self.domain_form.addRow(self.periodic_enabled)
         self.domain_form.addRow("k_point", self.k_point_widget)
@@ -84,6 +86,7 @@ class DomainTab(QtWidgets.QWidget):
             self.cell_y,
             self.resolution,
             self.pml_width,
+            self.random_seed,
             self.k_point_x,
             self.k_point_y,
             self.k_point_z,
@@ -135,6 +138,17 @@ class DomainTab(QtWidgets.QWidget):
             if not result.ok:
                 _log_error(self.store, f"{label}: {result.message}", self)
                 ok = False
+        seed = self.random_seed.text().strip()
+        if seed:
+            try:
+                evaluate_random_seed_expression(seed, self.store.state.parameters)
+                _set_invalid(self.random_seed, False)
+            except ValueError as exc:
+                _set_invalid(self.random_seed, True)
+                _log_error(self.store, f"Random Seed: {exc}", self)
+                ok = False
+        else:
+            _set_invalid(self.random_seed, False)
         return ok
 
     def _on_apply(self) -> None:
@@ -153,6 +167,7 @@ class DomainTab(QtWidgets.QWidget):
             cylindrical_enabled=self.cylindrical_enabled.isChecked(),
             cylindrical_m=self.cylindrical_m.text().strip(),
         )
+        self.store.state.random_seed = self.random_seed.text().strip()
         self.store.notify()
 
     def _sync_periodic_controls(self) -> None:
@@ -240,6 +255,7 @@ class DomainTab(QtWidgets.QWidget):
         self.cell_y.setText(domain.cell_y)
         self.resolution.setText(domain.resolution)
         self.pml_width.setText(domain.pml_width)
+        self.random_seed.setText(self.store.state.random_seed)
         self.k_point_x.setText(domain.k_point_x)
         self.k_point_y.setText(domain.k_point_y)
         self.k_point_z.setText(domain.k_point_z)

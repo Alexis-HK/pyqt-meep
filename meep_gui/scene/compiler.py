@@ -11,7 +11,7 @@ from ..primitives import (
     resolve_source_time_references,
     source_kind,
 )
-from ..validation import evaluate_parameters
+from ..validation import build_project_rng, clone_rng, evaluate_parameters
 from .types import (
     CompilationContext,
     CompiledScene,
@@ -27,23 +27,34 @@ from .types import (
 )
 
 
-def evaluate_compilation_context(parameters) -> CompilationContext:
-    values, results = evaluate_parameters(parameters)
+def evaluate_compilation_context(parameters, random_seed_expr: str = "") -> CompilationContext:
+    rng = build_project_rng(parameters, random_seed_expr)
+    values, results = evaluate_parameters(parameters, rng=rng)
     for result in results:
         if not result.ok:
             raise ValueError(f"Parameter '{result.name}': {result.message}")
-    return CompilationContext(parameter_values=values)
+    return CompilationContext(
+        parameter_values=values,
+        rng=rng,
+        random_seed_expr=str(random_seed_expr or ""),
+    )
 
 
 def compile_project_scene(
     state: ProjectState,
     *,
     parameter_values: dict[str, float] | None = None,
+    rng=None,
 ) -> CompiledScene:
+    random_seed_expr = getattr(state, "random_seed", "")
     context = (
-        CompilationContext(parameter_values=dict(parameter_values))
+        CompilationContext(
+            parameter_values=dict(parameter_values),
+            rng=rng if rng is not None else build_project_rng(state.parameters, random_seed_expr),
+            random_seed_expr=str(random_seed_expr or ""),
+        )
         if parameter_values is not None
-        else evaluate_compilation_context(state.parameters)
+        else evaluate_compilation_context(state.parameters, random_seed_expr)
     )
     scene = _compile_scene_spec(
         name="scattering",
@@ -62,11 +73,17 @@ def compile_transmission_scenes(
     state: ProjectState,
     *,
     parameter_values: dict[str, float] | None = None,
+    rng=None,
 ) -> TransmissionSceneBundle:
+    random_seed_expr = getattr(state, "random_seed", "")
     context = (
-        CompilationContext(parameter_values=dict(parameter_values))
+        CompilationContext(
+            parameter_values=dict(parameter_values),
+            rng=rng if rng is not None else build_project_rng(state.parameters, random_seed_expr),
+            random_seed_expr=str(random_seed_expr or ""),
+        )
         if parameter_values is not None
-        else evaluate_compilation_context(state.parameters)
+        else evaluate_compilation_context(state.parameters, random_seed_expr)
     )
     scattering = CompiledScene(
         scene=_compile_scene_spec(
@@ -132,6 +149,7 @@ def _compile_scene_spec(
                     parameter_values=context.parameter_values,
                     material_names=material_names,
                     name_prefix=getattr(item, "name", "") or "scripted",
+                    rng=clone_rng(context.rng),
                 )
             except Exception as exc:
                 raise ValueError(f"Geometry '{getattr(item, 'name', '')}': {exc}") from exc

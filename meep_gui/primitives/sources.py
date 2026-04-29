@@ -271,7 +271,7 @@ def _source_time_to_runtime(source_time, context, eval_required, label: str):
 
     def src_func(t: float) -> complex:
         try:
-            return evaluator(parameter_values, {"t": t})
+            return evaluator(parameter_values, {"t": t}, rng=context.rng)
         except ValueError as exc:
             raise ValueError(f"{label}.src_func: {exc}") from exc
 
@@ -346,7 +346,7 @@ def _runtime_amp_func(src, context):
 
     def amp_func(x: float, y: float) -> complex:
         try:
-            return evaluator(parameter_values, {"x": x, "y": y})
+            return evaluator(parameter_values, {"x": x, "y": y}, rng=context.rng)
         except ValueError as exc:
             raise ValueError(f"source '{src.name}' amp_func: {exc}") from exc
 
@@ -408,7 +408,7 @@ def _custom_to_runtime_source(src, context, eval_required):
     if src.source_time is None:
         raise ValueError(f"Source '{src.name}': missing source time.")
 
-    amplitude = evaluate_complex_expression(src.amplitude_expr, context.parameter_values)
+    amplitude = evaluate_complex_expression(src.amplitude_expr, context.parameter_values, rng=context.rng)
     return SourceSpec(
         kind="custom",
         center_x=eval_required(src.center_x_expr, context, "center_x"),
@@ -442,9 +442,9 @@ def _gaussian_beam_to_runtime_source(src, context, eval_required):
         beam_kdir_x=eval_required(src.beam_kdir_x_expr, context, "beam_kdir_x"),
         beam_kdir_y=eval_required(src.beam_kdir_y_expr, context, "beam_kdir_y"),
         beam_w0=eval_required(src.beam_w0_expr, context, "beam_w0"),
-        beam_e0_x=evaluate_complex_expression(src.beam_e0_x_expr, context.parameter_values),
-        beam_e0_y=evaluate_complex_expression(src.beam_e0_y_expr, context.parameter_values),
-        beam_e0_z=evaluate_complex_expression(src.beam_e0_z_expr, context.parameter_values),
+        beam_e0_x=evaluate_complex_expression(src.beam_e0_x_expr, context.parameter_values, rng=context.rng),
+        beam_e0_y=evaluate_complex_expression(src.beam_e0_y_expr, context.parameter_values, rng=context.rng),
+        beam_e0_z=evaluate_complex_expression(src.beam_e0_z_expr, context.parameter_values, rng=context.rng),
     )
 
 
@@ -480,7 +480,7 @@ def _eigenmode_to_runtime_source(src, context, eval_required):
         width_x=eval_required(src.size_x_expr, context, "size_x"),
         width_y=eval_required(src.size_y_expr, context, "size_y"),
         component=src.component,
-        amplitude=evaluate_complex_expression(src.amplitude_expr, context.parameter_values),
+        amplitude=evaluate_complex_expression(src.amplitude_expr, context.parameter_values, rng=context.rng),
         amp_func=_runtime_amp_func(src, context),
         source_time=_source_time_to_runtime(src.source_time, context, eval_required, src.name or "src"),
         eig_lattice_size=eig_lattice_size,

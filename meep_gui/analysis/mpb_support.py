@@ -8,8 +8,8 @@ from ..scene import compile_project_scene
 from ..scene.runtime import eval_required
 
 
-def build_mpb_geometry(state: ProjectState, mp, values: dict[str, float], *, deps) -> list[object]:
-    compiled = compile_project_scene(state, parameter_values=values)
+def build_mpb_geometry(state: ProjectState, mp, values: dict[str, float], *, deps, rng=None) -> list[object]:
+    compiled = compile_project_scene(state, parameter_values=values, rng=rng)
     materials: dict[str, object] = {}
     for medium in compiled.scene.media:
         if medium.name:

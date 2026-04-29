@@ -31,9 +31,9 @@ def harminv_lines(harminv_obj) -> list[str]:
     return lines
 
 
-def eval_required(expr: str, values: dict[str, float], label: str) -> float:
+def eval_required(expr: str, values: dict[str, float], label: str, *, rng=None) -> float:
     try:
-        return evaluate_numeric_expression(expr, values)
+        return evaluate_numeric_expression(expr, values, rng=rng)
     except ValueError as exc:
         raise ValueError(f"{label}: {exc}") from exc
 

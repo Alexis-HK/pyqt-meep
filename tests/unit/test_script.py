@@ -38,7 +38,8 @@ def test_harminv_script_writes_outputs_to_subfolder() -> None:
 
     assert "script_dir = os.path.dirname(os.path.abspath(__file__))" in code
     assert "_complex_eval" not in code
-    assert "import ast" not in code
+    assert "import ast" in code
+    assert "import random" in code
     assert "import cmath" not in code
     assert "symmetries = []" in code
     assert "symmetries.append(mp.Mirror(mp.X, phase=-1))" in code
@@ -89,6 +90,37 @@ def test_field_animation_script_emits_k_point_when_periodic_enabled() -> None:
     code = generate_script(state)
 
     assert "k_point=mp.Vector3(0.1, 0.2, 0.3)" in code
+
+
+def test_script_export_emits_seeded_random_helpers_and_dynamic_random_expressions() -> None:
+    state = ProjectState(
+        random_seed="seed_base + 1",
+        parameters=[
+            Parameter(name="seed_base", expr="4"),
+            Parameter(name="hole_radius", expr="uniform(0.1, 0.2)"),
+        ],
+        materials=[Material(name="si", index_expr="3")],
+        geometries=[
+            GeometryItem(
+                name="core",
+                kind="circle",
+                material="si",
+                props={"radius": "hole_radius + gauss(0, 0.01)", "center_x": "0", "center_y": "0"},
+            )
+        ],
+        analysis=AnalysisConfig(kind="field_animation"),
+    )
+
+    code = generate_script(state)
+
+    assert "import random" in code
+    assert "_RANDOM_SEED_EXPR = 'seed_base + 1'" in code
+    assert "_rng = _build_run_rng(overrides)" in code
+    assert "uniform = _rng.uniform" in code
+    assert "gauss = _rng.gauss" in code
+    assert "parameter_values['hole_radius'] = _eval_numeric('uniform(0.1, 0.2)', parameter_values, rng=rng)" in code
+    assert "radius=hole_radius + gauss(0, 0.01)" in code
+    assert "random()" not in code
 
 
 def test_field_animation_script_emits_cylindrical_kwargs_when_enabled() -> None:
@@ -208,7 +240,7 @@ def test_scripted_geometry_sweep_export_rebuilds_after_overrides() -> None:
 
     code = generate_script(state)
 
-    assert "parameter_values = _build_parameter_values(overrides)" in code
+    assert "parameter_values = _build_parameter_values(overrides, rng=_rng)" in code
     assert 'g = rect(center=(0, 0), size=(params["w"], 1))' in code
     assert "def _build_geometry_scripted_1(target=geometry, parameter_values=parameter_values" in code
     assert "run_analysis(run_dir, overrides={name: value})" in code
@@ -1139,7 +1171,7 @@ def test_sweep_enabled_script_emits_runner_and_folder_layout() -> None:
     assert "run_dir = _unique_dir(os.path.join(row_dir, _safe_dir_name(label)))" in code
     assert "run_analysis(run_dir, overrides={name: value})" in code
     assert "print(f\"Sweep {queue_index}/{queue_total}: {label} ({point_index}/{point_total} for {name})\")" in code
-    assert "parameter_values = _build_parameter_values(overrides)" in code
+    assert "parameter_values = _build_parameter_values(overrides, rng=_rng)" in code
     assert "run_domain_preview_out = os.path.join(out_dir, 'domain_preview.png')" in code
 
 

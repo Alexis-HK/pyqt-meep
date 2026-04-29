@@ -115,6 +115,40 @@ def test_scene_to_sim_params_leaves_k_point_unset_when_periodic_disabled() -> No
     assert params.k_point is None
 
 
+def test_scene_random_seed_makes_runtime_lowering_reproducible() -> None:
+    state = ProjectState(
+        random_seed="42",
+        parameters=[Parameter(name="r", expr="uniform(0.1, 0.2)")],
+        materials=[Material(name="si", index_expr="3")],
+        geometries=[
+            GeometryItem(
+                name="disk",
+                kind="circle",
+                material="si",
+                props={"radius": "r + gauss(0, 0.01)", "center_x": "0", "center_y": "0"},
+            )
+        ],
+    )
+
+    first = compile_project_scene(state)
+    second = compile_project_scene(state)
+    changed = compile_project_scene(
+        ProjectState(
+            random_seed="43",
+            parameters=state.parameters,
+            materials=state.materials,
+            geometries=state.geometries,
+        )
+    )
+
+    first_params = scene_to_sim_params(first.scene, first.context)
+    second_params = scene_to_sim_params(second.scene, second.context)
+    changed_params = scene_to_sim_params(changed.scene, changed.context)
+
+    assert first_params.shapes[0].radius == second_params.shapes[0].radius
+    assert first_params.shapes[0].radius != changed_params.shapes[0].radius
+
+
 def test_transmission_scene_bundle_keeps_scattering_and_reference_separate() -> None:
     state = ProjectState(
         materials=[Material(name="si", index_expr="2")],

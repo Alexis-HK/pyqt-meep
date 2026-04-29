@@ -10,8 +10,8 @@ from .types import CancelFn, LogFn, PlotResult, RunResult
 from .workspace import create_run_output_dir
 
 
-def _eval_nonnegative_int(expr: str, values: dict[str, float], label: str, *, deps) -> int:
-    value = deps._eval_required(expr, values, label)
+def _eval_nonnegative_int(expr: str, values: dict[str, float], label: str, *, deps, rng=None) -> int:
+    value = deps._eval_required(expr, values, label, rng=rng)
     rounded = int(round(value))
     if abs(value - rounded) > 1e-9:
         raise ValueError(f"{label} must be an integer.")
@@ -20,8 +20,8 @@ def _eval_nonnegative_int(expr: str, values: dict[str, float], label: str, *, de
     return rounded
 
 
-def _eval_positive_float(expr: str, values: dict[str, float], label: str, *, deps) -> float:
-    value = deps._eval_required(expr, values, label)
+def _eval_positive_float(expr: str, values: dict[str, float], label: str, *, deps, rng=None) -> float:
+    value = deps._eval_required(expr, values, label, rng=rng)
     if value <= 0:
         raise ValueError(f"{label} must be > 0.")
     return value
@@ -101,26 +101,26 @@ def run_meep_k_points_impl(
     state = copy.deepcopy(state)
     cfg = state.analysis.meep_k_points
 
-    values, results = deps.evaluate_parameters(state.parameters)
+    values, results, rng = deps._evaluate_project_parameters(state)
     for result in results:
         if not result.ok:
             raise ValueError(f"Parameter '{result.name}': {result.message}")
 
-    kpoint_interp = _eval_nonnegative_int(cfg.kpoint_interp, values, "kpoint_interp", deps=deps)
-    run_time = _eval_positive_float(cfg.run_time, values, "run_time", deps=deps)
+    kpoint_interp = _eval_nonnegative_int(cfg.kpoint_interp, values, "kpoint_interp", deps=deps, rng=rng)
+    run_time = _eval_positive_float(cfg.run_time, values, "run_time", deps=deps, rng=rng)
 
     entered_points = []
     for idx, kp in enumerate(cfg.kpoints, start=1):
         entered_points.append(
             (
-                deps._eval_required(kp.kx, values, f"kpoint[{idx}].kx"),
-                deps._eval_required(kp.ky, values, f"kpoint[{idx}].ky"),
+                deps._eval_required(kp.kx, values, f"kpoint[{idx}].kx", rng=rng),
+                deps._eval_required(kp.ky, values, f"kpoint[{idx}].ky", rng=rng),
             )
         )
     if len(entered_points) < 2:
         raise ValueError("Meep k points requires at least two input k-points.")
 
-    params = deps._build_sim_params(state)
+    params = deps._build_sim_params(state, values, rng=rng)
     params.k_point = None
     sim = deps.build_sim(params, log)
     mp = deps._import_meep()

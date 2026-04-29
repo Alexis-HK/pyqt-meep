@@ -120,6 +120,37 @@ emit(g, material=materials["silicon"])
     assert result.vertex_count > 3
 
 
+def test_geometry_script_random_helpers_use_supplied_rng() -> None:
+    import random
+
+    expected = random.Random(7)
+    result = _run(
+        """
+r = uniform(0.1, 0.2) + gauss(0, 0.01)
+g = circle(center=(0, 0), radius=r, segments=16)
+emit(g, material=materials["silicon"])
+""",
+        params={},
+        materials={"silicon"},
+    )
+    seeded = run_geometry_script(
+        """
+r = uniform(0.1, 0.2) + gauss(0, 0.01)
+g = circle(center=(0, 0), radius=r, segments=16)
+emit(g, material=materials["silicon"])
+""",
+        parameter_values={},
+        material_names={"silicon"},
+        rng=random.Random(7),
+    )
+
+    expected_radius = expected.uniform(0.1, 0.2) + expected.gauss(0, 0.01)
+    first_x = seeded.polygons[0].vertices[0][0]
+
+    assert result.emitted_count == 1
+    assert abs(first_x - expected_radius) < 1e-12
+
+
 def test_geometry_script_region_disk_and_sinusoidal_boundary() -> None:
     disk = _run(
         'g = region("x*x + y*y < r*r", bounds=(-2, -2, 2, 2), resolution=300)\n'

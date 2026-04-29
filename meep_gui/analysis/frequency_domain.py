@@ -15,8 +15,8 @@ from .types import ArtifactResult, CancelFn, LogFn, RunResult
 from .workspace import create_run_output_dir
 
 
-def _eval_positive_int(expr: str, values: dict[str, float], label: str, *, deps) -> int:
-    value = deps._eval_required(expr, values, label)
+def _eval_positive_int(expr: str, values: dict[str, float], label: str, *, deps, rng=None) -> int:
+    value = deps._eval_required(expr, values, label, rng=rng)
     rounded = int(round(value))
     if abs(value - rounded) > 1e-9:
         raise ValueError(f"{label} must be an integer.")
@@ -35,21 +35,21 @@ def run_frequency_domain_solver_impl(
     state = copy.deepcopy(state)
     cfg = state.analysis.frequency_domain_solver
 
-    values, results = deps.evaluate_parameters(state.parameters)
+    values, results, rng = deps._evaluate_project_parameters(state)
     for result in results:
         if not result.ok:
             raise ValueError(f"Parameter '{result.name}': {result.message}")
 
-    tolerance = deps._eval_required(cfg.tolerance, values, "tolerance")
+    tolerance = deps._eval_required(cfg.tolerance, values, "tolerance", rng=rng)
     if tolerance <= 0:
         raise ValueError("tolerance must be > 0.")
-    max_iters = _eval_positive_int(cfg.max_iters, values, "max_iters", deps=deps)
-    bicgstab_l = _eval_positive_int(cfg.bicgstab_l, values, "bicgstab_l", deps=deps)
+    max_iters = _eval_positive_int(cfg.max_iters, values, "max_iters", deps=deps, rng=rng)
+    bicgstab_l = _eval_positive_int(cfg.bicgstab_l, values, "bicgstab_l", deps=deps, rng=rng)
 
     if not state.sources:
         log("Warning: no sources are configured; frequency-domain solve may produce a zero field.")
 
-    params = deps._build_sim_params(state)
+    params = deps._build_sim_params(state, values, rng=rng)
     sim = deps.build_sim(params, log, force_complex_fields=True)
     mp = deps._import_meep()
 

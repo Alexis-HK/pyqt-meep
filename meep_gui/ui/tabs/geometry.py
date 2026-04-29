@@ -6,7 +6,7 @@ from ...geometry_script import validate_geometry_script
 from ...model import GeometryItem
 from ...primitives import GEOMETRY_REGISTRY, geometry_kind
 from ...store import ProjectStore
-from ...validation import evaluate_parameters, validate_name, validate_numeric_expression
+from ...validation import build_project_rng, evaluate_parameters, validate_name, validate_numeric_expression
 from ..common import (
     _log_error,
     _mark_row_warning,
@@ -169,7 +169,8 @@ class GeometryTab(QtWidgets.QWidget):
             widget.setText(value)
 
     def _validate_script_source(self, source: str):
-        values, results = evaluate_parameters(self.store.state.parameters)
+        rng = build_project_rng(self.store.state.parameters, self.store.state.random_seed)
+        values, results = evaluate_parameters(self.store.state.parameters, rng=rng)
         for result in results:
             if not result.ok:
                 return None, f"Parameter '{result.name}': {result.message}"
@@ -178,6 +179,7 @@ class GeometryTab(QtWidgets.QWidget):
             parameter_values=values,
             material_names=set(_material_names(self.store)),
             name_prefix=self.name_input.text().strip() or "scripted",
+            rng=rng,
         )
         if not validation.ok:
             return validation, validation.errors[0] if validation.errors else "Invalid geometry script."

@@ -1543,9 +1543,9 @@ def test_parameters_tab_import_overwrites_and_invalid_import_is_atomic(
 
     assert [(p.name, p.expr) for p in store.state.parameters] == [("a", "1"), ("b", "a + sqrt(4)")]
     script = generate_script(store.state)
-    assert "parameter_values['a'] = _eval_numeric('1', parameter_values)" in script
+    assert "parameter_values['a'] = _eval_numeric('1', parameter_values, rng=rng)" in script
     assert "a = parameter_values['a']" in script
-    assert "parameter_values['b'] = _eval_numeric('a + sqrt(4)', parameter_values)" in script
+    assert "parameter_values['b'] = _eval_numeric('a + sqrt(4)', parameter_values, rng=rng)" in script
     assert "b = parameter_values['b']" in script
 
     bad_path = tmp_path / "bad_params.txt"

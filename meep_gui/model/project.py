@@ -22,6 +22,7 @@ class ProjectState:
     geometries: list[GeometryItem] = field(default_factory=list)
     sources: list[SourceItem] = field(default_factory=list)
     domain: Domain = field(default_factory=Domain)
+    random_seed: str = ""
     flux_monitors: list[FluxMonitorConfig] = field(default_factory=list)
     analysis: AnalysisConfig = field(default_factory=AnalysisConfig)
     sweep: SweepConfig = field(default_factory=SweepConfig)
@@ -29,6 +30,7 @@ class ProjectState:
 
     def normalize(self) -> None:
         self.domain = normalize_domain(self.domain)
+        self.random_seed = "" if self.random_seed is None else str(self.random_seed)
 
         if self.analysis.kind not in {
             "field_animation",

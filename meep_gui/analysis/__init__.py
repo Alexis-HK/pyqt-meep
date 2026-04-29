@@ -7,7 +7,7 @@ from ..sim.builder import build_sim
 from ..sim.imports import import_meep as _import_meep
 from ..sim.runner import run_sim
 from ..specs import FluxMonitorSpec, HarminvSpec, SimParams, build_flux_specs, build_sim_params
-from ..validation import evaluate_parameters
+from ..validation import build_project_rng, evaluate_parameters
 from .common import (
     eval_required as _eval_required,
     export_flux_plots as _export_flux_plots,
@@ -40,6 +40,12 @@ from .types import (
 
 _build_flux_specs = build_flux_specs
 _build_sim_params = build_sim_params
+
+
+def _evaluate_project_parameters(state: ProjectState):
+    rng = build_project_rng(state.parameters, getattr(state, "random_seed", ""))
+    values, results = evaluate_parameters(state.parameters, rng=rng)
+    return values, results, rng
 
 
 def _import_mpb():
@@ -190,6 +196,7 @@ __all__ = [
     "run_mpb_modesolver",
     "run_sweep",
     "run_transmission_spectrum",
+    "_evaluate_project_parameters",
     "_eval_required",
     "_build_flux_specs",
     "_build_sim_params",

@@ -4,7 +4,12 @@ from PyQt5 import QtWidgets
 
 from ...model import AnalysisConfig, KPoint, MeepKPointsConfig
 from ...store import ProjectStore
-from ...validation import evaluate_numeric_expression, evaluate_parameters, validate_numeric_expression
+from ...validation import (
+    build_project_rng,
+    evaluate_numeric_expression,
+    evaluate_parameters,
+    validate_numeric_expression,
+)
 from ..common import _log_error, _set_invalid
 from ..dialogs import KPointEditDialog
 from ..scope import parameter_names
@@ -164,20 +169,21 @@ class MeepKPointsPanel(QtWidgets.QWidget):
             _log_error(self.store, "Meep k points requires at least two input k-points.", self)
             return False
 
-        values, results = evaluate_parameters(self.store.state.parameters)
+        rng = build_project_rng(self.store.state.parameters, self.store.state.random_seed)
+        values, results = evaluate_parameters(self.store.state.parameters, rng=rng)
         for result in results:
             if not result.ok:
                 _log_error(self.store, f"Parameter '{result.name}': {result.message}", self)
                 return False
 
-        interp_value = evaluate_numeric_expression(self.kpoint_interp.text().strip(), values)
+        interp_value = evaluate_numeric_expression(self.kpoint_interp.text().strip(), values, rng=rng)
         is_nonnegative_int = abs(interp_value - round(interp_value)) <= 1e-9 and round(interp_value) >= 0
         _set_invalid(self.kpoint_interp, not is_nonnegative_int)
         if not is_nonnegative_int:
             _log_error(self.store, "K Intercept must be a non-negative integer.", self)
             return False
 
-        run_time_value = evaluate_numeric_expression(self.run_time.text().strip(), values)
+        run_time_value = evaluate_numeric_expression(self.run_time.text().strip(), values, rng=rng)
         _set_invalid(self.run_time, run_time_value <= 0)
         if run_time_value <= 0:
             _log_error(self.store, "Run Time must be > 0.", self)

@@ -406,6 +406,7 @@ def load_state_dict(raw: dict) -> ProjectState:
         geometries=load_geometries(raw.get("geometries", [])),
         sources=load_sources(raw.get("sources", [])),
         domain=load_domain(raw.get("domain", {})),
+        random_seed=as_str(raw.get("random_seed", ""), ""),
         flux_monitors=load_flux_monitors(raw.get("flux_monitors", [])),
         analysis=analysis,
         sweep=load_sweep(raw.get("sweep", {})),

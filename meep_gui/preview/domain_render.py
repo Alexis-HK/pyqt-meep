@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from ..model import ProjectState
 from ..scene import compile_project_scene, scene_to_sim_params
-from ..validation import evaluate_numeric_expression, evaluate_parameters
+from ..validation import build_project_rng, evaluate_numeric_expression, evaluate_parameters
 
 try:
     from ..sim import build_sim as _default_build_sim
@@ -88,13 +88,14 @@ def render_domain_preview_axes(
     issues: list[RenderIssue] = []
     ax.clear()
 
-    values, param_results = evaluate_parameters(state.parameters)
+    rng = build_project_rng(state.parameters, getattr(state, "random_seed", ""))
+    values, param_results = evaluate_parameters(state.parameters, rng=rng)
     for result in param_results:
         if not result.ok:
             issues.append(RenderIssue(f"Parameter '{result.name}': {result.message}"))
 
     if state.analysis.kind == "mpb_modesolver":
-        _render_mpb_preview(ax, state, values, issues)
+        _render_mpb_preview(ax, state, values, issues, rng=rng)
     else:
         _render_meep_preview(
             ax,
@@ -103,6 +104,7 @@ def render_domain_preview_axes(
             issues,
             preview_domain=preview_domain,
             build_sim_impl=build_sim_impl,
+            rng=rng,
         )
     return issues
 
@@ -139,6 +141,7 @@ def _render_meep_preview(
     *,
     preview_domain: str | None = None,
     build_sim_impl=None,
+    rng=None,
 ) -> None:
     sim_builder = _default_build_sim if build_sim_impl is None else build_sim_impl
     if sim_builder is None:
@@ -148,7 +151,7 @@ def _render_meep_preview(
 
     preview_state = _state_for_meep_preview(state, preview_domain=preview_domain)
     try:
-        compiled = compile_project_scene(preview_state)
+        compiled = compile_project_scene(preview_state, parameter_values=values, rng=rng)
         params = scene_to_sim_params(compiled.scene, compiled.context)
         params.symmetries = []
         sim = sim_builder(params, lambda _msg: None)
@@ -165,18 +168,22 @@ def _render_meep_preview(
             cx = evaluate_numeric_expression(
                 monitor.center_x_expr,
                 compiled.context.parameter_values,
+                rng=compiled.context.rng,
             )
             cy = evaluate_numeric_expression(
                 monitor.center_y_expr,
                 compiled.context.parameter_values,
+                rng=compiled.context.rng,
             )
             sx = evaluate_numeric_expression(
                 monitor.size_x_expr,
                 compiled.context.parameter_values,
+                rng=compiled.context.rng,
             )
             sy = evaluate_numeric_expression(
                 monitor.size_y_expr,
                 compiled.context.parameter_values,
+                rng=compiled.context.rng,
             )
         except ValueError as exc:
             issues.append(RenderIssue(f"Flux monitor '{monitor.name}': {exc}"))
@@ -196,8 +203,8 @@ def _render_meep_preview(
     if preview_state.analysis.kind == "harminv":
         cfg = preview_state.analysis.harminv
         try:
-            hx = evaluate_numeric_expression(cfg.point_x, values)
-            hy = evaluate_numeric_expression(cfg.point_y, values)
+            hx = evaluate_numeric_expression(cfg.point_x, values, rng=rng)
+            hy = evaluate_numeric_expression(cfg.point_y, values, rng=rng)
             ax.plot(hx, hy, marker="x", color="#006400", markersize=7, markeredgewidth=1.6)
         except ValueError as exc:
             issues.append(RenderIssue(f"Harminv monitor: {exc}"))
@@ -211,10 +218,12 @@ def _render_meep_preview(
                 tx = evaluate_numeric_expression(
                     getattr(cfg, f"{prefix}_field_decay_point_x"),
                     values,
+                    rng=rng,
                 )
                 ty = evaluate_numeric_expression(
                     getattr(cfg, f"{prefix}_field_decay_point_y"),
                     values,
+                    rng=rng,
                 )
                 ax.plot(tx, ty, marker="x", color="#006400", markersize=7, markeredgewidth=1.6)
             except ValueError as exc:
@@ -240,6 +249,8 @@ def _render_mpb_preview(
     state: ProjectState,
     values: dict[str, float],
     issues: list[RenderIssue],
+    *,
+    rng=None,
 ) -> None:
     if state.domain.symmetry_enabled and state.domain.symmetries:
         msg = "Domain symmetries are FDTD-only and ignored in MPB preview."
@@ -262,22 +273,22 @@ def _render_mpb_preview(
 
     cfg = state.analysis.mpb_modesolver
     try:
-        lattice_x = evaluate_numeric_expression(cfg.lattice_x, values)
-        lattice_y = evaluate_numeric_expression(cfg.lattice_y, values)
-        basis1_x = evaluate_numeric_expression(cfg.basis1_x, values)
-        basis1_y = evaluate_numeric_expression(cfg.basis1_y, values)
-        basis2_x = evaluate_numeric_expression(cfg.basis2_x, values)
-        basis2_y = evaluate_numeric_expression(cfg.basis2_y, values)
-        num_bands = int(evaluate_numeric_expression(cfg.num_bands, values))
-        resolution = int(evaluate_numeric_expression(cfg.resolution, values))
-        unit_cells = int(evaluate_numeric_expression(cfg.unit_cells, values))
+        lattice_x = evaluate_numeric_expression(cfg.lattice_x, values, rng=rng)
+        lattice_y = evaluate_numeric_expression(cfg.lattice_y, values, rng=rng)
+        basis1_x = evaluate_numeric_expression(cfg.basis1_x, values, rng=rng)
+        basis1_y = evaluate_numeric_expression(cfg.basis1_y, values, rng=rng)
+        basis2_x = evaluate_numeric_expression(cfg.basis2_x, values, rng=rng)
+        basis2_y = evaluate_numeric_expression(cfg.basis2_y, values, rng=rng)
+        num_bands = int(evaluate_numeric_expression(cfg.num_bands, values, rng=rng))
+        resolution = int(evaluate_numeric_expression(cfg.resolution, values, rng=rng))
+        unit_cells = int(evaluate_numeric_expression(cfg.unit_cells, values, rng=rng))
     except ValueError as exc:
         issues.append(RenderIssue(f"MPB preview: {exc}"))
         ax.text(0.5, 0.5, str(exc), transform=ax.transAxes, ha="center", va="center")
         return
 
     try:
-        compiled = compile_project_scene(state)
+        compiled = compile_project_scene(state, parameter_values=values, rng=rng)
         params = scene_to_sim_params(compiled.scene, compiled.context)
     except Exception as exc:
         issues.append(RenderIssue(f"MPB preview scene: {exc}"))
@@ -317,8 +328,8 @@ def _render_mpb_preview(
     if cfg.kpoints:
         for kp in cfg.kpoints:
             try:
-                kx = evaluate_numeric_expression(kp.kx, values)
-                ky = evaluate_numeric_expression(kp.ky, values)
+                kx = evaluate_numeric_expression(kp.kx, values, rng=rng)
+                ky = evaluate_numeric_expression(kp.ky, values, rng=rng)
             except ValueError as exc:
                 issues.append(RenderIssue(f"K-point: {exc}"))
                 continue

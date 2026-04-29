@@ -69,6 +69,7 @@ def test_absent_new_sections_fixture_keeps_defaults() -> None:
     assert state.domain.k_point_x == "0"
     assert state.domain.k_point_y == "0"
     assert state.domain.k_point_z == "0"
+    assert state.random_seed == ""
     assert state.domain.cylindrical_enabled is False
     assert state.domain.cylindrical_m == "0"
     assert state.analysis.frequency_domain_solver.component == "Ez"
@@ -116,6 +117,17 @@ def test_domain_cylindrical_fields_roundtrip() -> None:
     assert dumped["analysis"]["transmission_spectrum"]["reference_state"]["domain"][
         "cylindrical_m"
     ] == "2"
+
+
+def test_random_seed_roundtrips() -> None:
+    raw = _load_fixture("minimal_analysis.json")
+    raw["random_seed"] = "seed + 1"
+
+    state = state_from_dict(raw)
+    dumped = state_to_dict(state)
+
+    assert state.random_seed == "seed + 1"
+    assert dumped["random_seed"] == "seed + 1"
 
 
 def test_source_enabled_defaults_true_and_roundtrips() -> None:

@@ -8,7 +8,7 @@ from .types import CompilationContext, SceneSpec
 
 def eval_required(expr: str, context: CompilationContext, label: str) -> float:
     try:
-        return evaluate_numeric_expression(expr, context.parameter_values)
+        return evaluate_numeric_expression(expr, context.parameter_values, rng=context.rng)
     except ValueError as exc:
         raise ValueError(f"{label}: {exc}") from exc
 

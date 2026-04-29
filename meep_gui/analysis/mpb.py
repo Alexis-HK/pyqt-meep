@@ -33,24 +33,24 @@ def run_mpb_modesolver_impl(
     state = copy.deepcopy(state)
     cfg = state.analysis.mpb_modesolver
 
-    values, results = deps.evaluate_parameters(state.parameters)
+    values, results, rng = deps._evaluate_project_parameters(state)
     for result in results:
         if not result.ok:
             raise ValueError(f"Parameter '{result.name}': {result.message}")
 
     mp, mpb = deps._import_mpb()
 
-    lattice_x = deps._eval_required(cfg.lattice_x, values, "lattice_x")
-    lattice_y = deps._eval_required(cfg.lattice_y, values, "lattice_y")
-    basis1_x = deps._eval_required(cfg.basis1_x, values, "basis1_x")
-    basis1_y = deps._eval_required(cfg.basis1_y, values, "basis1_y")
-    basis2_x = deps._eval_required(cfg.basis2_x, values, "basis2_x")
-    basis2_y = deps._eval_required(cfg.basis2_y, values, "basis2_y")
-    num_bands = max(1, int(deps._eval_required(cfg.num_bands, values, "num_bands")))
-    resolution = max(2, int(deps._eval_required(cfg.resolution, values, "resolution")))
-    unit_cells = max(1, int(deps._eval_required(cfg.unit_cells, values, "unit_cells")))
-    kpoint_interp = max(0, int(deps._eval_required(cfg.kpoint_interp, values, "kpoint_interp")))
-    max_mode_images = max(1, int(deps._eval_required(cfg.max_mode_images, values, "max_mode_images")))
+    lattice_x = deps._eval_required(cfg.lattice_x, values, "lattice_x", rng=rng)
+    lattice_y = deps._eval_required(cfg.lattice_y, values, "lattice_y", rng=rng)
+    basis1_x = deps._eval_required(cfg.basis1_x, values, "basis1_x", rng=rng)
+    basis1_y = deps._eval_required(cfg.basis1_y, values, "basis1_y", rng=rng)
+    basis2_x = deps._eval_required(cfg.basis2_x, values, "basis2_x", rng=rng)
+    basis2_y = deps._eval_required(cfg.basis2_y, values, "basis2_y", rng=rng)
+    num_bands = max(1, int(deps._eval_required(cfg.num_bands, values, "num_bands", rng=rng)))
+    resolution = max(2, int(deps._eval_required(cfg.resolution, values, "resolution", rng=rng)))
+    unit_cells = max(1, int(deps._eval_required(cfg.unit_cells, values, "unit_cells", rng=rng)))
+    kpoint_interp = max(0, int(deps._eval_required(cfg.kpoint_interp, values, "kpoint_interp", rng=rng)))
+    max_mode_images = max(1, int(deps._eval_required(cfg.max_mode_images, values, "max_mode_images", rng=rng)))
 
     selected_pols: list[str] = []
     if cfg.run_tm:
@@ -62,8 +62,8 @@ def run_mpb_modesolver_impl(
 
     k_points_raw = []
     for kp in cfg.kpoints:
-        kx = deps._eval_required(kp.kx, values, "kpoint.kx")
-        ky = deps._eval_required(kp.ky, values, "kpoint.ky")
+        kx = deps._eval_required(kp.kx, values, "kpoint.kx", rng=rng)
+        ky = deps._eval_required(kp.ky, values, "kpoint.ky", rng=rng)
         k_points_raw.append(mp.Vector3(kx, ky, 0))
     if not k_points_raw:
         k_points_raw = [mp.Vector3(0, 0, 0), mp.Vector3(0.5, 0, 0)]
@@ -75,11 +75,11 @@ def run_mpb_modesolver_impl(
 
     field_k_points = []
     for idx, kp in enumerate(cfg.field_kpoints, start=1):
-        kx = deps._eval_required(kp.kx, values, f"field_kpoint[{idx}].kx")
-        ky = deps._eval_required(kp.ky, values, f"field_kpoint[{idx}].ky")
+        kx = deps._eval_required(kp.kx, values, f"field_kpoint[{idx}].kx", rng=rng)
+        ky = deps._eval_required(kp.ky, values, f"field_kpoint[{idx}].ky", rng=rng)
         field_k_points.append(mp.Vector3(kx, ky, 0))
 
-    geometry = build_mpb_geometry(state, mp, values, deps=deps)
+    geometry = build_mpb_geometry(state, mp, values, deps=deps, rng=rng)
     lattice = mp.Lattice(
         size=mp.Vector3(lattice_x, lattice_y, 0),
         basis1=mp.Vector3(basis1_x, basis1_y, 0),

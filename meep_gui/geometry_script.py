@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass, field
 import math
+import random
 from typing import Any
 
 MAX_LOOP_ITERATIONS = 10000
@@ -141,12 +142,14 @@ def run_geometry_script(
     parameter_values: dict[str, float],
     material_names: set[str],
     name_prefix: str = "scripted",
+    rng: random.Random | None = None,
 ) -> GeometryScriptResult:
     interpreter = _Interpreter(
         source=source,
         parameter_values=parameter_values,
         material_names=material_names,
         name_prefix=name_prefix,
+        rng=rng,
     )
     return interpreter.run()
 
@@ -157,6 +160,7 @@ def validate_geometry_script(
     parameter_values: dict[str, float],
     material_names: set[str],
     name_prefix: str = "scripted",
+    rng: random.Random | None = None,
 ) -> GeometryScriptValidation:
     try:
         result = run_geometry_script(
@@ -164,6 +168,7 @@ def validate_geometry_script(
             parameter_values=parameter_values,
             material_names=material_names,
             name_prefix=name_prefix,
+            rng=rng,
         )
     except Exception as exc:
         return GeometryScriptValidation(ok=False, errors=(str(exc),))
@@ -194,11 +199,13 @@ class _Interpreter:
         parameter_values: dict[str, float],
         material_names: set[str],
         name_prefix: str,
+        rng: random.Random | None,
     ) -> None:
         self.source = source or ""
         self.parameter_values = {str(k): float(v) for k, v in parameter_values.items()}
         self.material_names = {str(name) for name in material_names}
         self.name_prefix = name_prefix or "scripted"
+        self.rng = rng or random.Random()
         self.referenced_parameters: set[str] = set()
         self.referenced_materials: set[str] = set()
         self.shapely = _require_shapely()
@@ -255,6 +262,8 @@ class _Interpreter:
             "linspace": self._func_linspace,
             "reverse": self._func_reverse,
             "range": self._func_range,
+            "uniform": self._func_uniform,
+            "gauss": self._func_gauss,
             "sin": math.sin,
             "cos": math.cos,
             "tan": math.tan,
@@ -504,7 +513,7 @@ class _Interpreter:
         if not isinstance(expr.func, ast.Name):
             raise GeometryScriptError("Only math function calls are allowed in region expressions.", expr)
         name = expr.func.id
-        if name not in {"sin", "cos", "tan", "sqrt", "abs", "exp", "log", "min", "max"}:
+        if name not in {"sin", "cos", "tan", "sqrt", "abs", "exp", "log", "min", "max", "uniform", "gauss"}:
             raise GeometryScriptError(f"Unknown region function: {name}", expr)
         args = [
             self._eval_expr(arg, extra_env=extra_env, region=True)
@@ -764,6 +773,12 @@ class _Interpreter:
         if len(values) > MAX_LIST_LENGTH:
             raise GeometryScriptError("range exceeds the list length limit.")
         return values
+
+    def _func_uniform(self, a, b) -> float:
+        return float(self.rng.uniform(self._number(a), self._number(b)))
+
+    def _func_gauss(self, mu, sigma) -> float:
+        return float(self.rng.gauss(self._number(mu), self._number(sigma)))
 
     def _func_region(self, expr, *, bounds, resolution=256) -> _GeometryValue:
         if not isinstance(expr, str):

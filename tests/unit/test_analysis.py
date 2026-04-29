@@ -230,10 +230,10 @@ def test_transmission_reuse_trusts_cached_reference_and_pairs_by_index(
 
     deps = SimpleNamespace(
         run_sim=_fake_run_sim,
-        evaluate_parameters=lambda _params: ({}, []),
-        _eval_required=lambda expr, _values, _name: float(expr),
-        _build_flux_specs=_fake_build_flux_specs,
-        _build_sim_params=lambda _state: object(),
+        _evaluate_project_parameters=lambda _state: ({}, [], None),
+        _eval_required=lambda expr, _values, _name, **_kwargs: float(expr),
+        _build_flux_specs=lambda run_state, values, **_kwargs: _fake_build_flux_specs(run_state, values),
+        _build_sim_params=lambda _state, *_args, **_kwargs: object(),
         _run_canceled=lambda: RunResult(status="canceled"),
         _import_meep=lambda: None,
     )
@@ -355,10 +355,10 @@ def test_transmission_field_decay_stop_condition_uses_per_domain_settings(
 
     deps = SimpleNamespace(
         run_sim=_fake_run_sim,
-        evaluate_parameters=lambda _params: ({}, []),
-        _eval_required=lambda expr, _values, _name: float(expr),
-        _build_flux_specs=_fake_build_flux_specs,
-        _build_sim_params=lambda _state: object(),
+        _evaluate_project_parameters=lambda _state: ({}, [], None),
+        _eval_required=lambda expr, _values, _name, **_kwargs: float(expr),
+        _build_flux_specs=lambda run_state, values, **_kwargs: _fake_build_flux_specs(run_state, values),
+        _build_sim_params=lambda _state, *_args, **_kwargs: object(),
         _run_canceled=lambda: RunResult(status="canceled"),
         _import_meep=lambda: _FakeMeep(),
     )

@@ -2,16 +2,16 @@ from .analysis import FluxMonitorResult, FluxMonitorSpec, HarminvSpec, SimParams
 from .simulation import Shape, SourceSpec, SymmetrySpec
 
 
-def build_sim_params(state):
+def build_sim_params(state, values=None, *, rng=None):
     from .builders import build_sim_params as _build_sim_params
 
-    return _build_sim_params(state)
+    return _build_sim_params(state, values, rng=rng)
 
 
-def build_flux_specs(state, values):
+def build_flux_specs(state, values, *, rng=None):
     from .builders import build_flux_specs as _build_flux_specs
 
-    return _build_flux_specs(state, values)
+    return _build_flux_specs(state, values, rng=rng)
 
 __all__ = [
     "FluxMonitorResult",

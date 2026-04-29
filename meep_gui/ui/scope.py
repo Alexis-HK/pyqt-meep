@@ -4,7 +4,7 @@ from dataclasses import dataclass, replace
 
 from ..model import Domain, FluxMonitorConfig, GeometryItem, SourceItem
 from ..store import ProjectStore
-from ..validation import NameRegistry, evaluate_numeric_expression, evaluate_parameters
+from ..validation import NameRegistry, build_project_rng, evaluate_numeric_expression, evaluate_parameters
 
 
 @dataclass(frozen=True)
@@ -94,18 +94,19 @@ def transmission_monitor_signature_from_state(
     if ref_monitor is None or dev_monitor is None:
         return None
 
-    values, results = evaluate_parameters(store.state.parameters)
+    rng = build_project_rng(store.state.parameters, store.state.random_seed)
+    values, results = evaluate_parameters(store.state.parameters, rng=rng)
     for result in results:
         if not result.ok:
             return None
 
     try:
-        ref_fcen = float(evaluate_numeric_expression(ref_monitor.fcen, values))
-        ref_df = float(evaluate_numeric_expression(ref_monitor.df, values))
-        ref_nfreq = max(1, int(evaluate_numeric_expression(ref_monitor.nfreq, values)))
-        dev_fcen = float(evaluate_numeric_expression(dev_monitor.fcen, values))
-        dev_df = float(evaluate_numeric_expression(dev_monitor.df, values))
-        dev_nfreq = max(1, int(evaluate_numeric_expression(dev_monitor.nfreq, values)))
+        ref_fcen = float(evaluate_numeric_expression(ref_monitor.fcen, values, rng=rng))
+        ref_df = float(evaluate_numeric_expression(ref_monitor.df, values, rng=rng))
+        ref_nfreq = max(1, int(evaluate_numeric_expression(ref_monitor.nfreq, values, rng=rng)))
+        dev_fcen = float(evaluate_numeric_expression(dev_monitor.fcen, values, rng=rng))
+        dev_df = float(evaluate_numeric_expression(dev_monitor.df, values, rng=rng))
+        dev_nfreq = max(1, int(evaluate_numeric_expression(dev_monitor.nfreq, values, rng=rng)))
     except Exception:
         return None
 

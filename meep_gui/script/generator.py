@@ -25,8 +25,10 @@ from .simulation import (
 
 def _emit_header(lines: list[str], plan: ScriptPlan) -> None:
     line(lines, "from math import sqrt, exp, sin, cos, tan, log, log10")
+    line(lines, "import ast")
     line(lines, "import csv")
     line(lines, "import os")
+    line(lines, "import random")
     if _plan_uses_scripted_geometry(plan):
         line(lines, "import math")
     if _plan_uses_cmath(plan):
@@ -176,16 +178,102 @@ def _emit_runtime_helpers(
     *,
     include_sweep_helpers: bool,
     include_scripted_geometry_helpers: bool,
+    random_seed_expr: str = "",
 ) -> None:
     params = _parameter_specs(scene)
 
     for text in (
-        "def _eval_numeric(expr, scope):",
+        "_PARAMETER_EXPRESSIONS = {",
+    ):
+        line(lines, text)
+    for name, expr in params:
+        line(lines, f"    {name!r}: {expr!r},")
+    for text in (
+        "}",
+        f"_RANDOM_SEED_EXPR = {str(random_seed_expr or '')!r}",
+        "_EXPR_FUNCTION_NAMES = {",
+        "    'sin', 'cos', 'tan', 'exp', 'sqrt', 'log', 'log10', 'uniform', 'gauss'",
+        "}",
+        "",
+        "def _prepare_expr(expr):",
+        "    return str(expr).strip().replace('^', '**')",
+        "",
+        "def _expr_tree(expr):",
+        "    return ast.parse(_prepare_expr(expr), mode='eval')",
+        "",
+        "def _expr_names(expr):",
+        "    try:",
+        "        tree = _expr_tree(expr)",
+        "    except SyntaxError as exc:",
+        "        raise ValueError('Invalid expression.') from exc",
+        "    return {",
+        "        node.id",
+        "        for node in ast.walk(tree)",
+        "        if isinstance(node, ast.Name) and node.id not in _EXPR_FUNCTION_NAMES",
+        "    }",
+        "",
+        "def _expr_uses_random(expr):",
+        "    try:",
+        "        tree = _expr_tree(expr)",
+        "    except SyntaxError as exc:",
+        "        raise ValueError('Invalid expression.') from exc",
+        "    return any(",
+        "        isinstance(node, ast.Call)",
+        "        and isinstance(node.func, ast.Name)",
+        "        and node.func.id in {'uniform', 'gauss'}",
+        "        for node in ast.walk(tree)",
+        "    )",
+        "",
+        "def _eval_numeric(expr, scope, *, rng=None, allow_random=True):",
         "    env = dict(globals())",
         "    env.update(scope)",
-        "    return eval(str(expr), {'__builtins__': {}}, env)",
+        "    if allow_random:",
+        "        active_rng = rng if rng is not None else random.Random()",
+        "        env.update({'uniform': active_rng.uniform, 'gauss': active_rng.gauss})",
+        "    try:",
+        "        return eval(_prepare_expr(expr), {'__builtins__': {}}, env)",
+        "    except Exception as exc:",
+        "        raise ValueError(f'Invalid expression: {expr}') from exc",
         "",
-        "def _build_parameter_values(overrides=None):",
+        "def _seed_parameter_scope(overrides=None):",
+        "    parameter_overrides = dict(overrides or {})",
+        "    parameter_names = set(_PARAMETER_EXPRESSIONS)",
+        "    values = {}",
+        "    visiting = set()",
+        "",
+        "    def _eval_param(name):",
+        "        if name in values:",
+        "            return values[name]",
+        "        if name in visiting:",
+        "            raise ValueError(f\"Random seed dependency cycle at parameter '{name}'.\")",
+        "        if name not in parameter_names:",
+        "            raise ValueError(f\"Random seed references unknown parameter '{name}'.\")",
+        "        expr = str(parameter_overrides[name]) if name in parameter_overrides else _PARAMETER_EXPRESSIONS[name]",
+        "        if _expr_uses_random(expr):",
+        "            raise ValueError(f\"Random seed depends on randomized parameter '{name}'.\")",
+        "        visiting.add(name)",
+        "        scope = {dep: _eval_param(dep) for dep in _expr_names(expr) if dep in parameter_names}",
+        "        try:",
+        "            values[name] = _eval_numeric(expr, scope, allow_random=False)",
+        "        finally:",
+        "            visiting.remove(name)",
+        "        return values[name]",
+        "",
+        "    for dep in _expr_names(_RANDOM_SEED_EXPR):",
+        "        if dep in parameter_names:",
+        "            _eval_param(dep)",
+        "    return values",
+        "",
+        "def _build_run_rng(overrides=None):",
+        "    if not str(_RANDOM_SEED_EXPR).strip():",
+        "        return random.Random()",
+        "    if _expr_uses_random(_RANDOM_SEED_EXPR):",
+        "        raise ValueError('Random Seed cannot call uniform() or gauss().')",
+        "    seed_scope = _seed_parameter_scope(overrides)",
+        "    seed_value = _eval_numeric(_RANDOM_SEED_EXPR, seed_scope, allow_random=False)",
+        "    return random.Random(seed_value)",
+        "",
+        "def _build_parameter_values(overrides=None, *, rng=None):",
         "    parameter_overrides = dict(overrides or {})",
         "    parameter_values = {}",
     ):
@@ -193,9 +281,9 @@ def _emit_runtime_helpers(
     for name, expr in params:
         for text in (
             f"    if {name!r} in parameter_overrides:",
-            f"        parameter_values[{name!r}] = _eval_numeric(str(parameter_overrides[{name!r}]), parameter_values)",
+            f"        parameter_values[{name!r}] = _eval_numeric(str(parameter_overrides[{name!r}]), parameter_values, rng=rng)",
             "    else:",
-            f"        parameter_values[{name!r}] = _eval_numeric({expr!r}, parameter_values)",
+            f"        parameter_values[{name!r}] = _eval_numeric({expr!r}, parameter_values, rng=rng)",
         ):
             line(lines, text)
     line(lines, "    return parameter_values")
@@ -239,13 +327,13 @@ def _emit_runtime_helpers(
         "def _sweep_label(name, value):",
         "    return f'{name}={_format_sweep_value(value)}'",
         "",
-        "def _expand_sweep_values(name, start_expr, stop_expr, step_expr, base_values):",
+        "def _expand_sweep_values(name, start_expr, stop_expr, step_expr, base_values, *, rng=None):",
         "    available = set(base_values)",
         "    if name not in available:",
         "        raise ValueError(f\"Sweep parameter '{name}' is not defined in Parameters.\")",
-        "    start = _eval_numeric(start_expr, dict(base_values))",
-        "    stop = _eval_numeric(stop_expr, dict(base_values))",
-        "    step_size = _eval_numeric(step_expr, dict(base_values))",
+        "    start = _eval_numeric(start_expr, dict(base_values), rng=rng)",
+        "    stop = _eval_numeric(stop_expr, dict(base_values), rng=rng)",
+        "    step_size = _eval_numeric(step_expr, dict(base_values), rng=rng)",
         "    eps = 1e-12 * max(1.0, abs(start), abs(stop), abs(step_size))",
         "    if abs(start - stop) <= eps:",
         "        return [float(stop)]",
@@ -288,9 +376,12 @@ def _build_analysis_body(
     body: list[str] = []
 
     line(body, "os.makedirs(out_dir, exist_ok=True)")
+    line(body, "_rng = _build_run_rng(overrides)")
+    line(body, "uniform = _rng.uniform")
+    line(body, "gauss = _rng.gauss")
     if params:
         line(body, "# Parameters")
-    line(body, "parameter_values = _build_parameter_values(overrides)")
+    line(body, "parameter_values = _build_parameter_values(overrides, rng=_rng)")
     for name, _expr in params:
         line(body, f"{name} = parameter_values[{name!r}]")
     if params:
@@ -346,7 +437,8 @@ def _emit_non_sweep_main(lines: list[str], kind: str) -> None:
 def _emit_sweep_main(lines: list[str], state: ProjectState) -> None:
     line(lines, "if __name__ == '__main__':")
     line(lines, f"    analysis_kind = {state.analysis.kind!r}")
-    line(lines, "    base_parameter_values = _build_parameter_values()")
+    line(lines, "    base_rng = _build_run_rng()")
+    line(lines, "    base_parameter_values = _build_parameter_values(rng=base_rng)")
     line(lines, "    sweep_specs = [")
     for item in state.sweep.params:
         line(
@@ -371,7 +463,7 @@ def _emit_sweep_main(lines: list[str], state: ProjectState) -> None:
     line(lines, "        seen_sweep_names.add(name)")
     line(
         lines,
-        "        values = _expand_sweep_values(name, start_expr, stop_expr, step_expr, base_parameter_values)",
+        "        values = _expand_sweep_values(name, start_expr, stop_expr, step_expr, base_parameter_values, rng=base_rng)",
     )
     line(lines, "        expanded_sweeps.append((name, values))")
     line(lines, "        queue_total += len(values)")
@@ -419,6 +511,7 @@ def generate_script(state: ProjectState, log: LogFn | None = None) -> str:
         scene,
         include_sweep_helpers=sweep_enabled,
         include_scripted_geometry_helpers=_plan_uses_scripted_geometry(prepared.plan),
+        random_seed_expr=state.random_seed,
     )
     if prepared.plan.backend == "meep_fdtd":
         emit_domain_preview_helpers(lines)

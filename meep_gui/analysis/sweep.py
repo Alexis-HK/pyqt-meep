@@ -31,7 +31,7 @@ def _expand_sweep_values(
     *,
     deps,
 ) -> list[float]:
-    values, results = deps.evaluate_parameters(state.parameters)
+    values, results, rng = deps._evaluate_project_parameters(state)
     for result in results:
         if not result.ok:
             raise ValueError(f"Parameter '{result.name}': {result.message}")
@@ -40,9 +40,9 @@ def _expand_sweep_values(
     if spec.name not in available:
         raise ValueError(f"Sweep parameter '{spec.name}' is not defined in Parameters.")
 
-    start = deps._eval_required(spec.start, values, f"sweep.{spec.name}.start")
-    stop = deps._eval_required(spec.stop, values, f"sweep.{spec.name}.stop")
-    step_size = deps._eval_required(spec.steps, values, f"sweep.{spec.name}.steps")
+    start = deps._eval_required(spec.start, values, f"sweep.{spec.name}.start", rng=rng)
+    stop = deps._eval_required(spec.stop, values, f"sweep.{spec.name}.stop", rng=rng)
+    step_size = deps._eval_required(spec.steps, values, f"sweep.{spec.name}.steps", rng=rng)
     eps = 1e-12 * max(1.0, abs(start), abs(stop), abs(step_size))
 
     if abs(start - stop) <= eps:

@@ -15,6 +15,7 @@ def dump_state_dict(state: ProjectState) -> dict:
         "geometries": [asdict(g) for g in state.geometries],
         "sources": [asdict(s) for s in state.sources],
         "domain": asdict(state.domain),
+        "random_seed": state.random_seed,
         "flux_monitors": [asdict(m) for m in state.flux_monitors],
         "analysis": {
             "kind": state.analysis.kind,

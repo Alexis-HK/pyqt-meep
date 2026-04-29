@@ -23,6 +23,7 @@
     "symmetry_enabled": false,
     "symmetries": []
   },
+  "random_seed": "",
   "flux_monitors": [
     {
       "name": "fluxA",
