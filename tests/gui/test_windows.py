@@ -1227,6 +1227,62 @@ def test_domain_window_export_preview_writes_png_and_appends_extension(
     assert exported.stat().st_size > 0
 
 
+def test_domain_window_auto_update_can_pause_and_refresh(qtbot, monkeypatch) -> None:
+    store = ProjectStore()
+    update_calls = []
+
+    def _fake_update_from_state(self, state):
+        update_calls.append(state)
+        return []
+
+    monkeypatch.setattr(
+        domain_preview_module.DomainPreviewWidget,
+        "update_from_state",
+        _fake_update_from_state,
+    )
+
+    win = DomainWindow(store)
+    qtbot.addWidget(win)
+
+    assert len(update_calls) == 1
+    assert win.auto_update_checkbox.isChecked()
+    assert not win.refresh_preview_button.isEnabled()
+    assert win.preview_status.text() == "Preview current"
+
+    store.notify()
+
+    assert len(update_calls) == 2
+    assert win.preview_status.text() == "Preview current"
+
+    win.auto_update_checkbox.setChecked(False)
+
+    assert not win.auto_update_checkbox.isChecked()
+    assert win.refresh_preview_button.isEnabled()
+    assert win.preview_status.text() == "Preview paused - no pending changes"
+
+    store.notify()
+
+    assert len(update_calls) == 2
+    assert win.preview_status.text() == "Preview paused - pending changes"
+
+    qtbot.mouseClick(win.refresh_preview_button, QtCore.Qt.LeftButton)
+
+    assert len(update_calls) == 3
+    assert win.preview_status.text() == "Preview paused - no pending changes"
+
+    store.notify()
+
+    assert len(update_calls) == 3
+    assert win.preview_status.text() == "Preview paused - pending changes"
+
+    win.auto_update_checkbox.setChecked(True)
+
+    assert win.auto_update_checkbox.isChecked()
+    assert not win.refresh_preview_button.isEnabled()
+    assert len(update_calls) == 4
+    assert win.preview_status.text() == "Preview current"
+
+
 @pytest.mark.parametrize(
     ("analysis", "expected"),
     [

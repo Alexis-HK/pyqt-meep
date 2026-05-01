@@ -13,13 +13,23 @@ class DomainWindow(QuitOnCloseWindow):
         self.setWindowTitle("Meep GUI - Domain")
         self.resize(700, 600)
         self._store = store
+        self._auto_update_enabled = True
+        self._preview_dirty = False
 
         from ...preview import DomainPreviewWidget
 
         self.preview = DomainPreviewWidget(self)
+        self.auto_update_checkbox = QtWidgets.QCheckBox("Auto update")
+        self.auto_update_checkbox.setChecked(True)
+        self.refresh_preview_button = QtWidgets.QPushButton("Refresh Preview")
+        self.refresh_preview_button.setEnabled(False)
+        self.preview_status = QtWidgets.QLabel("")
         self.export_preview_button = QtWidgets.QPushButton("Export Preview")
 
         button_row = QtWidgets.QHBoxLayout()
+        button_row.addWidget(self.auto_update_checkbox)
+        button_row.addWidget(self.refresh_preview_button)
+        button_row.addWidget(self.preview_status)
         button_row.addStretch(1)
         button_row.addWidget(self.export_preview_button)
 
@@ -30,11 +40,42 @@ class DomainWindow(QuitOnCloseWindow):
         self.setCentralWidget(container)
 
         self.export_preview_button.clicked.connect(self._export_preview)
-        store.state_changed.connect(self._refresh)
-        self._refresh()
+        self.refresh_preview_button.clicked.connect(self._on_manual_refresh)
+        self.auto_update_checkbox.toggled.connect(self._on_auto_update_toggled)
+        store.state_changed.connect(self._on_state_changed)
+        self._update_preview_controls()
+        self._refresh_preview()
 
-    def _refresh(self) -> None:
+    def _on_state_changed(self) -> None:
+        if self._auto_update_enabled:
+            self._refresh_preview()
+            return
+        self._preview_dirty = True
+        self._update_preview_controls()
+
+    def _on_auto_update_toggled(self, checked: bool) -> None:
+        self._auto_update_enabled = bool(checked)
+        if self._auto_update_enabled:
+            self._refresh_preview()
+            return
+        self._update_preview_controls()
+
+    def _on_manual_refresh(self) -> None:
+        self._refresh_preview()
+
+    def _update_preview_controls(self) -> None:
+        self.refresh_preview_button.setEnabled(not self._auto_update_enabled)
+        if self._auto_update_enabled:
+            self.preview_status.setText("Preview current")
+        elif self._preview_dirty:
+            self.preview_status.setText("Preview paused - pending changes")
+        else:
+            self.preview_status.setText("Preview paused - no pending changes")
+
+    def _refresh_preview(self) -> None:
         issues = self.preview.update_from_state(self._store.state)
+        self._preview_dirty = False
+        self._update_preview_controls()
         for issue in issues:
             self._store.log_message(issue.message)
 

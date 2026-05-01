@@ -23,4 +23,9 @@ def test_full_application_windows_instantiate_offscreen(qtbot) -> None:
     assert workflow.centralWidget().count() == 9
     assert output.run_list.count() == 0
     assert domain.preview is not None
+    assert domain.auto_update_checkbox.text() == "Auto update"
+    assert domain.auto_update_checkbox.isChecked()
+    assert domain.refresh_preview_button.text() == "Refresh Preview"
+    assert not domain.refresh_preview_button.isEnabled()
+    assert domain.preview_status.text() == "Preview current"
     assert domain.export_preview_button.text() == "Export Preview"
