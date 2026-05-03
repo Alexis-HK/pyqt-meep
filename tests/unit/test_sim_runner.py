@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import meep_gui.sim.runner as runner
-from meep_gui.specs.simulation import SimParams
+from meep_gui.specs.simulation import HarminvSpec, SimParams
 
 
 def test_run_sim_omits_periodic_time_logs_and_preserves_step_funcs(monkeypatch) -> None:
@@ -100,3 +100,63 @@ def test_run_sim_still_checks_stop_flag_without_time_logs(monkeypatch) -> None:
         "Done.",
     ]
     assert all(not message.startswith("t = ") for message in logs)
+
+
+def test_run_sim_registers_multiple_harminv_specs(monkeypatch) -> None:
+    logs: list[str] = []
+    callbacks_seen: list[object] = []
+
+    class _FakeSim:
+        def run(self, *callbacks, **kwargs) -> None:
+            assert kwargs == {"until_after_sources": 100}
+            callbacks_seen.extend(callbacks)
+
+    sim = _FakeSim()
+    harminv_objects: list[object] = []
+
+    class _FakeMP:
+        Simulation = object
+        Ez = "Ez"
+        Hz = "Hz"
+
+        class Vector3:
+            def __init__(self, x, y=0, z=0) -> None:
+                self.x = x
+                self.y = y
+                self.z = z
+
+        class Harminv:
+            def __init__(self, component, point, frequency, bandwidth) -> None:
+                self.component = component
+                self.point = point
+                self.frequency = frequency
+                self.bandwidth = bandwidth
+                harminv_objects.append(self)
+
+        @staticmethod
+        def after_sources(hobj):
+            return ("after_sources", hobj)
+
+    monkeypatch.setattr(runner, "import_meep", lambda: _FakeMP())
+    monkeypatch.setattr(runner, "component_map", lambda _mp: {"Ez": _FakeMP.Ez, "Hz": _FakeMP.Hz})
+    monkeypatch.setattr(runner, "build_sim", lambda _params, _log: sim)
+
+    callback_results: list[object] = []
+    result = runner.run_sim(
+        SimParams(),
+        logs.append,
+        until_after_sources=100,
+        harminv_specs=[
+            HarminvSpec(component="Ez", center_x=0, center_y=1, frequency=0.2, bandwidth=0.1),
+            HarminvSpec(component="Hz", center_x=2, center_y=3, frequency=0.4, bandwidth=0.3),
+        ],
+        harminv_cb=callback_results.append,
+    )
+
+    assert result.canceled is False
+    assert len(harminv_objects) == 2
+    assert callbacks_seen == [
+        ("after_sources", harminv_objects[0]),
+        ("after_sources", harminv_objects[1]),
+    ]
+    assert callback_results == harminv_objects

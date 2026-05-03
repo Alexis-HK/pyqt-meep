@@ -7,6 +7,8 @@ from meep_gui.model import (
     AnalysisConfig,
     Domain,
     FluxMonitorConfig,
+    HarminvConfig,
+    HarminvMonitorConfig,
     KPoint,
     MeepKPointsConfig,
     ProjectState,
@@ -103,7 +105,10 @@ def test_prepare_runtime_analysis_reports_chirped_pulse_as_custom_temporal_sourc
 
 def test_recipe_specific_error_message_wins_over_generic_capability_message() -> None:
     state = ProjectState(
-        analysis=AnalysisConfig(kind="harminv"),
+        analysis=AnalysisConfig(
+            kind="harminv",
+            harminv=HarminvConfig(monitors=[HarminvMonitorConfig()]),
+        ),
         sources=[
             SourceItem(
                 name="cw",
@@ -123,7 +128,10 @@ def test_recipe_specific_error_message_wins_over_generic_capability_message() ->
 
 def test_harminv_rejects_custom_temporal_sources_with_specific_message() -> None:
     state = ProjectState(
-        analysis=AnalysisConfig(kind="harminv"),
+        analysis=AnalysisConfig(
+            kind="harminv",
+            harminv=HarminvConfig(monitors=[HarminvMonitorConfig()]),
+        ),
         sources=[
             SourceItem(
                 name="custom_src",
@@ -138,6 +146,16 @@ def test_harminv_rejects_custom_temporal_sources_with_specific_message() -> None
 
     assert [item.message for item in prepared.validation.errors] == [
         "Harminv requires Gaussian (pulsed) sources. Custom temporal sources are not supported."
+    ]
+
+
+def test_harminv_requires_at_least_one_monitor() -> None:
+    state = ProjectState(analysis=AnalysisConfig(kind="harminv"))
+
+    prepared = prepare_runtime_analysis(state)
+
+    assert [item.message for item in prepared.validation.errors] == [
+        "Harminv requires at least one monitor."
     ]
 
 

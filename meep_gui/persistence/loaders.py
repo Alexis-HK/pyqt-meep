@@ -10,6 +10,7 @@ from ..model import (
     FluxMonitorConfig,
     GeometryItem,
     HarminvConfig,
+    HarminvMonitorConfig,
     KPoint,
     Material,
     MeepKPointsConfig,
@@ -149,19 +150,37 @@ def load_field_animation(raw: dict | None) -> FieldAnimationConfig:
 
 def load_harminv(raw: dict | None) -> HarminvConfig:
     raw = raw or {}
+    component = as_str(raw.get("component", "Ez"), "Ez")
     return HarminvConfig(
-        component=as_str(raw.get("component", "Ez"), "Ez"),
+        component=component,
         point_x=as_str(raw.get("point_x", "0"), "0"),
         point_y=as_str(raw.get("point_y", "0"), "0"),
         fcen=as_str(raw.get("fcen", "0.15"), "0.15"),
         df=as_str(raw.get("df", "0.1"), "0.1"),
+        animation_component=as_str(raw.get("animation_component", component), component),
         until_after_sources=as_str(raw.get("until_after_sources", "200"), "200"),
         animation_interval=as_str(raw.get("animation_interval", "1"), "1"),
         animation_fps=as_str(raw.get("animation_fps", "20"), "20"),
         output_dir=as_str(raw.get("output_dir", ""), ""),
         output_name=as_str(raw.get("output_name", "harminv_animation.mp4"), "harminv_animation.mp4"),
         harminv_log_path=as_str(raw.get("harminv_log_path", "harminv.txt"), "harminv.txt"),
+        monitors=load_harminv_monitors(raw.get("monitors", [])),
     )
+
+
+def load_harminv_monitors(raw: list[dict] | None) -> list[HarminvMonitorConfig]:
+    raw = raw or []
+    return [
+        HarminvMonitorConfig(
+            component=as_str(item.get("component", "Ez"), "Ez"),
+            point_x=as_str(item.get("point_x", "0"), "0"),
+            point_y=as_str(item.get("point_y", "0"), "0"),
+            fcen=as_str(item.get("fcen", "0.15"), "0.15"),
+            df=as_str(item.get("df", "0.1"), "0.1"),
+        )
+        for item in raw
+        if isinstance(item, dict)
+    ]
 
 
 def load_mpb(raw: dict | None) -> MpbModeSolverConfig:

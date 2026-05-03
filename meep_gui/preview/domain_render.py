@@ -202,12 +202,23 @@ def _render_meep_preview(
 
     if preview_state.analysis.kind == "harminv":
         cfg = preview_state.analysis.harminv
-        try:
-            hx = evaluate_numeric_expression(cfg.point_x, values, rng=rng)
-            hy = evaluate_numeric_expression(cfg.point_y, values, rng=rng)
-            ax.plot(hx, hy, marker="x", color="#006400", markersize=7, markeredgewidth=1.6)
-        except ValueError as exc:
-            issues.append(RenderIssue(f"Harminv monitor: {exc}"))
+        for idx, monitor in enumerate(cfg.monitors, start=1):
+            label = f"h{idx}"
+            try:
+                hx = evaluate_numeric_expression(monitor.point_x, values, rng=rng)
+                hy = evaluate_numeric_expression(monitor.point_y, values, rng=rng)
+                ax.plot(hx, hy, marker="x", color="#006400", markersize=7, markeredgewidth=1.6)
+                ax.text(
+                    hx,
+                    hy,
+                    label,
+                    color="#006400",
+                    fontsize=8,
+                    ha="left",
+                    va="bottom",
+                )
+            except ValueError as exc:
+                issues.append(RenderIssue(f"Harminv monitor {label}: {exc}"))
 
     if preview_state.analysis.kind == "transmission_spectrum":
         mode = preview_domain or state.analysis.transmission_spectrum.preview_domain

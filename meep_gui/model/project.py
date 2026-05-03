@@ -63,6 +63,36 @@ class ProjectState:
             )
             tx = self.analysis.transmission_spectrum
 
+        harminv = self.analysis.harminv
+        if harminv.component not in FIELD_COMPONENTS:
+            self.analysis = replace(
+                self.analysis,
+                harminv=replace(harminv, component="Ez"),
+            )
+            harminv = self.analysis.harminv
+
+        if harminv.animation_component not in FIELD_COMPONENTS:
+            self.analysis = replace(
+                self.analysis,
+                harminv=replace(harminv, animation_component=harminv.component),
+            )
+            harminv = self.analysis.harminv
+
+        normalized_monitors = []
+        monitor_changed = False
+        for monitor in harminv.monitors:
+            if monitor.component in FIELD_COMPONENTS:
+                normalized_monitors.append(monitor)
+                continue
+            normalized_monitors.append(replace(monitor, component="Ez"))
+            monitor_changed = True
+        if monitor_changed:
+            self.analysis = replace(
+                self.analysis,
+                harminv=replace(harminv, monitors=normalized_monitors),
+            )
+            harminv = self.analysis.harminv
+
         if tx.animation_component not in FIELD_COMPONENTS:
             self.analysis = replace(
                 self.analysis,

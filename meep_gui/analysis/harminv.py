@@ -10,6 +10,14 @@ from .types import ArtifactResult, CancelFn, LogFn, RunResult
 from .workspace import create_run_output_dir
 
 
+def _harminv_section(label: str, lines: list[str]) -> list[str]:
+    return [
+        f"========={label} MODES========",
+        *lines,
+        "",
+    ]
+
+
 def run_harminv_impl(
     state: ProjectState,
     log: LogFn,
@@ -36,6 +44,8 @@ def run_harminv_impl(
     )
     interval = deps._eval_required(cfg.animation_interval, values, "animation_interval", rng=rng)
     fps = int(deps._eval_required(cfg.animation_fps, values, "animation_fps", rng=rng))
+    if not cfg.monitors:
+        raise ValueError("Harminv requires at least one monitor.")
 
     output_dir = cfg.output_dir.strip()
     output_name = cfg.output_name.strip() or "harminv_animation.mp4"
@@ -53,23 +63,29 @@ def run_harminv_impl(
     def _component(name: str):
         return getattr(mp, name, getattr(mp, "Ez", None))
 
-    anim_comp = _component(cfg.component)
+    anim_comp = _component(cfg.animation_component)
     if anim_comp is None:
         raise ValueError("Meep field components are unavailable. Check your Meep installation.")
     animate = mp.Animate2D(fields=anim_comp, realtime=False)
 
-    hspec = deps.HarminvSpec(
-        component=cfg.component,
-        center_x=deps._eval_required(cfg.point_x, values, "point_x", rng=rng),
-        center_y=deps._eval_required(cfg.point_y, values, "point_y", rng=rng),
-        frequency=deps._eval_required(cfg.fcen, values, "fcen", rng=rng),
-        bandwidth=deps._eval_required(cfg.df, values, "df", rng=rng),
-    )
+    hspecs = []
+    for idx, monitor in enumerate(cfg.monitors, start=1):
+        label = f"h{idx}"
+        hspecs.append(
+            deps.HarminvSpec(
+                component=monitor.component,
+                center_x=deps._eval_required(monitor.point_x, values, f"{label}.point_x", rng=rng),
+                center_y=deps._eval_required(monitor.point_y, values, f"{label}.point_y", rng=rng),
+                frequency=deps._eval_required(monitor.fcen, values, f"{label}.fcen", rng=rng),
+                bandwidth=deps._eval_required(monitor.df, values, f"{label}.df", rng=rng),
+            )
+        )
 
-    harminv_lines: list[str] = []
+    harminv_sections: list[tuple[str, list[str]]] = []
 
     def handle_harminv(hobj) -> None:
-        harminv_lines.extend(deps._harminv_lines(hobj))
+        label = f"h{len(harminv_sections) + 1}"
+        harminv_sections.append((label, deps._harminv_lines(hobj)))
 
     if cancel_requested():
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -81,7 +97,7 @@ def run_harminv_impl(
         log,
         until_after_sources=until_after_sources,
         step_funcs=[mp.at_every(interval, animate)],
-        harminv_spec=hspec,
+        harminv_specs=hspecs,
         harminv_cb=handle_harminv,
         stop_flag=cancel_requested,
         flux_monitors=flux_specs,
@@ -93,6 +109,12 @@ def run_harminv_impl(
 
     animate.to_mp4(fps, output_path)
     plots = deps._export_flux_plots(sim_result.flux_results, temp_dir, log)
+
+    harminv_lines: list[str] = []
+    for label, lines in harminv_sections:
+        harminv_lines.extend(_harminv_section(label, lines))
+    if harminv_lines and harminv_lines[-1] == "":
+        harminv_lines.pop()
 
     with open(temp_harminv_txt, "w", encoding="utf-8") as f:
         f.write("\n".join(harminv_lines) + ("\n" if harminv_lines else ""))
@@ -127,5 +149,8 @@ def run_harminv_impl(
         message="Harminv analysis completed.",
         artifacts=artifacts,
         plots=plots,
-        meta={"harminv_line_count": str(len(harminv_lines))},
+        meta={
+            "harminv_line_count": str(len(harminv_lines)),
+            "harminv_monitor_count": str(len(hspecs)),
+        },
     )

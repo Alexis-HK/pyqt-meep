@@ -17,6 +17,15 @@ class FieldAnimationConfig:
 
 
 @dataclass(frozen=True)
+class HarminvMonitorConfig:
+    component: str = "Ez"
+    point_x: str = "0"
+    point_y: str = "0"
+    fcen: str = "0.15"
+    df: str = "0.1"
+
+
+@dataclass(frozen=True)
 class HarminvConfig:
     component: str = "Ez"
     point_x: str = "0"
@@ -29,6 +38,8 @@ class HarminvConfig:
     output_dir: str = ""
     output_name: str = "harminv_animation.mp4"
     harminv_log_path: str = "harminv.txt"
+    animation_component: str = "Ez"
+    monitors: list[HarminvMonitorConfig] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

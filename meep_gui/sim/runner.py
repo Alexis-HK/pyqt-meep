@@ -25,6 +25,7 @@ def run_sim(
     stop_flag: Callable[[], bool] | None = None,
     step_funcs: list[object] | None = None,
     harminv_spec: HarminvSpec | None = None,
+    harminv_specs: list[HarminvSpec] | None = None,
     harminv_cb: Callable[[object], None] | None = None,
     flux_monitors: list[FluxMonitorSpec] | None = None,
     capture_flux_data: bool = False,
@@ -50,15 +51,20 @@ def run_sim(
     if step_funcs:
         callbacks.extend(step_funcs)
 
-    harminv_obj = None
+    active_harminv_specs = list(harminv_specs or [])
     if harminv_spec is not None:
-        comp = components.get(harminv_spec.component, mp.Ez)
+        active_harminv_specs.insert(0, harminv_spec)
+
+    harminv_objs = []
+    for spec in active_harminv_specs:
+        comp = components.get(spec.component, mp.Ez)
         harminv_obj = mp.Harminv(
             comp,
-            mp.Vector3(harminv_spec.center_x, harminv_spec.center_y),
-            harminv_spec.frequency,
-            harminv_spec.bandwidth,
+            mp.Vector3(spec.center_x, spec.center_y),
+            spec.frequency,
+            spec.bandwidth,
         )
+        harminv_objs.append(harminv_obj)
         callbacks.append(mp.after_sources(harminv_obj))
 
     flux_handles: list[tuple[FluxMonitorSpec, object]] = []
@@ -85,8 +91,9 @@ def run_sim(
         raise ValueError("until_time or until_after_sources must be provided.")
     log("Done.")
 
-    if harminv_obj is not None and harminv_cb is not None:
-        harminv_cb(harminv_obj)
+    if harminv_cb is not None:
+        for harminv_obj in harminv_objs:
+            harminv_cb(harminv_obj)
 
     flux_results: list[FluxMonitorResult] = []
     flux_data_out: dict[str, object] = {}

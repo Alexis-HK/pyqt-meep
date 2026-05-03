@@ -52,9 +52,18 @@ class HarminvRecipe(BaseRecipe):
         *,
         target: AnalysisTarget,
     ) -> tuple[ValidationIssue, ...]:
+        issues: list[ValidationIssue] = []
+        if not state.analysis.harminv.monitors:
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    message="Harminv requires at least one monitor.",
+                    code="harminv:monitors",
+                )
+            )
         features = extract_scene_features(scene=plan.scene, transmission=plan.transmission)
         if SceneFeature.CUSTOM_TEMPORAL_SOURCES in features:
-            return (
+            issues.append(
                 ValidationIssue(
                     severity="error",
                     message=(
@@ -66,7 +75,7 @@ class HarminvRecipe(BaseRecipe):
                 ),
             )
         if SceneFeature.CONTINUOUS_SOURCES in features:
-            return (
+            issues.append(
                 ValidationIssue(
                     severity="error",
                     message="Harminv requires Gaussian (pulsed) sources. Continuous sources are not supported.",
@@ -74,7 +83,7 @@ class HarminvRecipe(BaseRecipe):
                     feature=SceneFeature.CONTINUOUS_SOURCES.value,
                 ),
             )
-        return ()
+        return tuple(issues)
 
     def run(
         self,

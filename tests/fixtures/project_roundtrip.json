@@ -52,12 +52,22 @@
       "point_y": "0",
       "fcen": "0.15",
       "df": "0.1",
+      "animation_component": "Ez",
       "until_after_sources": "200",
       "animation_interval": "1",
       "animation_fps": "20",
       "output_dir": "",
       "output_name": "harminv_animation.mp4",
-      "harminv_log_path": "harminv.txt"
+      "harminv_log_path": "harminv.txt",
+      "monitors": [
+        {
+          "component": "Ez",
+          "point_x": "0",
+          "point_y": "0",
+          "fcen": "0.15",
+          "df": "0.1"
+        }
+      ]
     },
     "transmission_spectrum": {
       "incident_monitor": "ref_inc",

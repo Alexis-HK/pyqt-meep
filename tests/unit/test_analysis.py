@@ -7,6 +7,7 @@ import pytest
 
 import meep_gui.analysis as analysis
 import meep_gui.analysis.domain_artifacts as domain_artifacts_module
+import meep_gui.analysis.harminv as harminv_module
 import meep_gui.analysis.meep_k_points as meep_k_points_module
 import meep_gui.analysis.transmission as transmission_module
 from meep_gui.analysis import (
@@ -27,6 +28,8 @@ from meep_gui.model import (
     MpbModeSolverConfig,
     Parameter,
     FluxMonitorConfig,
+    HarminvConfig,
+    HarminvMonitorConfig,
     ProjectState,
     RunRecord,
     SourceItem,
@@ -96,12 +99,87 @@ def test_transmission_requires_monitors_before_running_meep() -> None:
 
 def test_harminv_rejects_continuous_sources() -> None:
     state = ProjectState(
-        analysis=AnalysisConfig(kind="harminv"),
+        analysis=AnalysisConfig(
+            kind="harminv",
+            harminv=HarminvConfig(monitors=[HarminvMonitorConfig()]),
+        ),
         sources=[SourceItem(name="src", kind="continuous", component="Ez", props={"fcen": "0.15"})],
     )
 
     with pytest.raises(ValueError, match="Harminv requires Gaussian"):
         run_by_kind(state, _log, _no_cancel)
+
+
+def test_harminv_runtime_writes_ordered_monitor_sections(monkeypatch, tmp_path) -> None:
+    seen_specs: list[object] = []
+
+    class _FakeAnimate:
+        def __init__(self, **kwargs) -> None:
+            self.kwargs = kwargs
+
+        def to_mp4(self, _fps, path) -> None:
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("mp4")
+
+    class _FakeMP:
+        Ez = object()
+        Hz = object()
+
+        @staticmethod
+        def Animate2D(**kwargs):
+            return _FakeAnimate(**kwargs)
+
+        @staticmethod
+        def at_every(interval, animate):
+            return ("at_every", interval, animate)
+
+    def _fake_run_sim(_params, _log, **kwargs):
+        seen_specs.extend(kwargs["harminv_specs"])
+        for idx, _spec in enumerate(kwargs["harminv_specs"], start=1):
+            kwargs["harminv_cb"](SimpleNamespace(idx=idx))
+        return SimpleNamespace(canceled=False, flux_results=[])
+
+    monkeypatch.setattr(harminv_module, "create_run_output_dir", lambda _prefix: str(tmp_path))
+    monkeypatch.setattr(harminv_module, "create_domain_preview_artifacts", lambda *args, **kwargs: [])
+
+    deps = SimpleNamespace(
+        run_sim=_fake_run_sim,
+        _evaluate_project_parameters=lambda _state: ({}, [], None),
+        _eval_required=lambda expr, _values, _name, **_kwargs: float(expr),
+        _build_sim_params=lambda *_args, **_kwargs: object(),
+        _build_flux_specs=lambda *_args, **_kwargs: [],
+        _export_flux_plots=lambda *_args, **_kwargs: [],
+        _harminv_lines=lambda hobj: [f"harminv: freq={hobj.idx}"],
+        _import_meep=lambda: _FakeMP(),
+        HarminvSpec=analysis.HarminvSpec,
+        _run_canceled=lambda: RunResult(status="canceled"),
+    )
+    state = ProjectState(
+        analysis=AnalysisConfig(
+            kind="harminv",
+            harminv=HarminvConfig(
+                animation_component="Hz",
+                monitors=[
+                    HarminvMonitorConfig(component="Ez", point_x="0", point_y="0", fcen="0.2", df="0.1"),
+                    HarminvMonitorConfig(component="Hz", point_x="1", point_y="2", fcen="0.3", df="0.2"),
+                ],
+            ),
+        )
+    )
+
+    result = harminv_module.run_harminv_impl(state, _log, _no_cancel, deps=deps)
+
+    assert result.status == "completed"
+    assert result.meta["harminv_monitor_count"] == "2"
+    assert [spec.component for spec in seen_specs] == ["Ez", "Hz"]
+    text = (tmp_path / "harminv.txt").read_text(encoding="utf-8")
+    assert text == (
+        "=========h1 MODES========\n"
+        "harminv: freq=1\n"
+        "\n"
+        "=========h2 MODES========\n"
+        "harminv: freq=2\n"
+    )
 
 
 def test_transmission_rejects_continuous_sources_in_both_domains() -> None:
@@ -476,6 +554,43 @@ def test_transmission_preview_marks_active_field_decay_probe() -> None:
     assert len(ax.lines) == 1
     assert list(ax.lines[0].get_xdata()) == [-2.5]
     assert list(ax.lines[0].get_ydata()) == [3.0]
+
+
+def test_harminv_preview_marks_all_monitors() -> None:
+    pytest.importorskip("matplotlib")
+    from matplotlib.figure import Figure
+
+    class _FakeSim:
+        def plot2D(self, ax) -> None:
+            ax.set_xlim(-5, 5)
+            ax.set_ylim(-5, 5)
+
+    state = ProjectState(
+        analysis=AnalysisConfig(
+            kind="harminv",
+            harminv=HarminvConfig(
+                monitors=[
+                    HarminvMonitorConfig(point_x="1", point_y="2"),
+                    HarminvMonitorConfig(point_x="-1", point_y="-2"),
+                ],
+            ),
+        ),
+    )
+
+    fig = Figure()
+    ax = fig.add_subplot(111)
+
+    issues = render_domain_preview_axes(
+        ax,
+        state,
+        build_sim_impl=lambda _params, _log: _FakeSim(),
+    )
+
+    assert not issues
+    assert len(ax.lines) == 2
+    assert [list(line.get_xdata()) for line in ax.lines] == [[1.0], [-1.0]]
+    assert [list(line.get_ydata()) for line in ax.lines] == [[2.0], [-2.0]]
+    assert {text.get_text() for text in ax.texts} >= {"h1", "h2"}
 
 
 def test_run_field_animation_wrapper_uses_patched_run_sim(monkeypatch) -> None:
@@ -1018,7 +1133,10 @@ def test_sweep_dispatches_harminv(monkeypatch) -> None:
     _patch_recipe_runner(monkeypatch, "harminv", _fake_runner)
 
     state = ProjectState(
-        analysis=AnalysisConfig(kind="harminv"),
+        analysis=AnalysisConfig(
+            kind="harminv",
+            harminv=HarminvConfig(monitors=[HarminvMonitorConfig()]),
+        ),
         parameters=[Parameter(name="a", expr="1")],
         sweep=SweepConfig(
             enabled=True,

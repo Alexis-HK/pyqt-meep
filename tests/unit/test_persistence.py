@@ -76,6 +76,8 @@ def test_absent_new_sections_fixture_keeps_defaults() -> None:
     assert state.analysis.frequency_domain_solver.tolerance == "1e-8"
     assert state.analysis.frequency_domain_solver.max_iters == "10000"
     assert state.analysis.frequency_domain_solver.bicgstab_l == "10"
+    assert state.analysis.harminv.animation_component == "Ez"
+    assert state.analysis.harminv.monitors == []
     assert state.analysis.meep_k_points.kpoint_interp == "19"
     assert state.analysis.meep_k_points.run_time == "300"
     assert state.analysis.meep_k_points.kpoints == []
@@ -128,6 +130,48 @@ def test_random_seed_roundtrips() -> None:
 
     assert state.random_seed == "seed + 1"
     assert dumped["random_seed"] == "seed + 1"
+
+
+def test_harminv_monitors_roundtrip() -> None:
+    raw = _load_fixture("minimal_analysis.json")
+    raw.setdefault("analysis", {})
+    raw["analysis"]["harminv"] = {
+        "component": "Hz",
+        "point_x": "draft_x",
+        "point_y": "draft_y",
+        "fcen": "draft_f",
+        "df": "draft_df",
+        "animation_component": "Ez",
+        "until_after_sources": "250",
+        "animation_interval": "2",
+        "animation_fps": "30",
+        "output_dir": "",
+        "output_name": "harminv_animation.mp4",
+        "harminv_log_path": "harminv.txt",
+        "monitors": [
+            {
+                "component": "Ez",
+                "point_x": "0",
+                "point_y": "0",
+                "fcen": "0.15",
+                "df": "0.1",
+            },
+            {
+                "component": "Hz",
+                "point_x": "1",
+                "point_y": "-1",
+                "fcen": "0.2",
+                "df": "0.05",
+            },
+        ],
+    }
+
+    state = state_from_dict(raw)
+    dumped = state_to_dict(state)
+
+    assert state.analysis.harminv.animation_component == "Ez"
+    assert len(state.analysis.harminv.monitors) == 2
+    assert dumped["analysis"]["harminv"] == raw["analysis"]["harminv"]
 
 
 def test_source_enabled_defaults_true_and_roundtrips() -> None:

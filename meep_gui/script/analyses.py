@@ -17,16 +17,28 @@ def emit_field_animation(lines: list[str], cfg) -> None:
 def emit_harminv(lines: list[str], cfg) -> None:
     output_name = os.path.basename(cfg.output_name.strip() or "harminv_animation.mp4")
     log_name = os.path.basename(cfg.harminv_log_path.strip() or "harminv.txt")
+    line(lines, "# Harminv")
+    line(lines, "harminv_monitors = []")
+    for idx, monitor in enumerate(cfg.monitors, start=1):
+        line(
+            lines,
+            "harminv_monitors.append(("
+            f"'h{idx}', "
+            "mp.Harminv("
+            f"mp.{monitor.component}, "
+            f"mp.Vector3({monitor.point_x}, {monitor.point_y}), "
+            f"{monitor.fcen}, {monitor.df}"
+            ")))",
+        )
     for text in (
-        "# Harminv",
-        "harminv = mp.Harminv("
-        f"mp.{cfg.component}, mp.Vector3({cfg.point_x}, {cfg.point_y}), "
-        f"{cfg.fcen}, {cfg.df})",
-        f"animate = mp.Animate2D(fields=mp.{cfg.component}, realtime=False)",
-        "sim.run("
-        f"mp.at_every({cfg.animation_interval}, animate), "
-        "mp.after_sources(harminv), "
-        f"until_after_sources={cfg.until_after_sources})",
+        "if not harminv_monitors:",
+        "    raise ValueError('Harminv requires at least one monitor.')",
+        f"animate = mp.Animate2D(fields=mp.{cfg.animation_component}, realtime=False)",
+        "harminv_callbacks = ["
+        f"mp.at_every({cfg.animation_interval}, animate)"
+        "]",
+        "harminv_callbacks.extend(mp.after_sources(hobj) for _label, hobj in harminv_monitors)",
+        f"sim.run(*harminv_callbacks, until_after_sources={cfg.until_after_sources})",
         f"anim_out = os.path.join(out_dir, \"{output_name}\")",
         f"animate.to_mp4({cfg.animation_fps}, anim_out)",
         f"harminv_out = os.path.join(out_dir, \"{log_name}\")",
@@ -54,8 +66,12 @@ def emit_harminv(lines: list[str], cfg) -> None:
         "        lines_out.append('harminv: ' + ' '.join(parts))",
         "    return lines_out",
         "with open(harminv_out, 'w', encoding='utf-8') as f:",
-        "    for line in _harminv_lines(harminv):",
-        "        f.write(line + '\\n')",
+        "    for idx, (label, hobj) in enumerate(harminv_monitors):",
+        "        if idx:",
+        "            f.write('\\n')",
+        "        f.write(f'========={label} MODES========\\n')",
+        "        for line in _harminv_lines(hobj):",
+        "            f.write(line + '\\n')",
         "print(f'Harminv log saved to {harminv_out}')",
     ):
         line(lines, text)

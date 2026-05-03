@@ -15,6 +15,7 @@ from meep_gui.model import (
     FrequencyDomainSolverConfig,
     FluxMonitorConfig,
     GeometryItem,
+    HarminvMonitorConfig,
     KPoint,
     Material,
     MeepKPointsConfig,
@@ -35,11 +36,13 @@ from meep_gui.script import generate_script
 from meep_gui.store import ProjectStore
 import meep_gui.preview.domain as domain_preview_module
 from meep_gui.ui.dialogs.geometry import GeometryEditDialog
+from meep_gui.ui.dialogs.harminv_monitor import HarminvMonitorEditDialog
 from meep_gui.ui.dialogs.source import SourceEditDialog
 from meep_gui.ui.panels.field_animation import FieldAnimationPanel
 from meep_gui.ui.dialogs.symmetry import SymmetryEditDialog
 from meep_gui.ui.panels.frequency_domain import FrequencyDomainPanel
 from meep_gui.ui.panels.harminv import HarminvPanel
+import meep_gui.ui.panels.harminv as harminv_panel_module
 from meep_gui.ui.panels.meep_k_points import MeepKPointsPanel
 from meep_gui.ui.panels.mpb import MpbPanel
 from meep_gui.ui.panels.transmission import TransmissionSpectrumPanel
@@ -944,6 +947,108 @@ def test_analysis_panels_omit_old_descriptive_prose(qtbot) -> None:
         "Runs two simulations: reference and scattering domains with independent geometry, sources, "
         "and monitors. Artifacts are exported from the Output window."
     ) not in panel_texts[4]
+
+
+def test_harminv_panel_adds_updates_removes_generated_monitors(qtbot, monkeypatch) -> None:
+    store = ProjectStore()
+    panel = HarminvPanel(store)
+    qtbot.addWidget(panel)
+    panel.load_from_config(store.state.analysis.harminv)
+
+    panel.animation_component.setCurrentText("Hz")
+    panel.component.setCurrentText("Ez")
+    panel.point_x.setText("1")
+    panel.point_y.setText("2")
+    panel.fcen.setText("0.3")
+    panel.df.setText("0.05")
+    qtbot.mouseClick(panel.add_button, QtCore.Qt.LeftButton)
+    panel.load_from_config(store.state.analysis.harminv)
+
+    assert store.state.analysis.harminv.animation_component == "Hz"
+    assert store.state.analysis.harminv.monitors == [
+        HarminvMonitorConfig(component="Ez", point_x="1", point_y="2", fcen="0.3", df="0.05")
+    ]
+    assert panel.table.item(0, 0).text() == "h1"
+
+    seen_dialog_monitors: list[HarminvMonitorConfig] = []
+
+    class _UpdateDialog:
+        def __init__(self, _store, monitor, _parent=None) -> None:
+            seen_dialog_monitors.append(monitor)
+            self.result = HarminvMonitorConfig(
+                component="Hz",
+                point_x="-1",
+                point_y="4",
+                fcen="0.4",
+                df="0.2",
+            )
+
+        def exec_(self) -> int:
+            return QtWidgets.QDialog.Accepted
+
+    monkeypatch.setattr(harminv_panel_module, "HarminvMonitorEditDialog", _UpdateDialog)
+    panel.table.setCurrentCell(0, 0)
+    panel.component.setCurrentText("Hy")
+    panel.point_x.setText("99")
+    qtbot.mouseClick(panel.update_button, QtCore.Qt.LeftButton)
+    panel.load_from_config(store.state.analysis.harminv)
+
+    assert seen_dialog_monitors == [
+        HarminvMonitorConfig(component="Ez", point_x="1", point_y="2", fcen="0.3", df="0.05")
+    ]
+    assert store.state.analysis.harminv.monitors[0].component == "Hz"
+    assert store.state.analysis.harminv.monitors[0].point_x == "-1"
+    assert store.state.analysis.harminv.monitors[0].point_y == "4"
+    assert panel.table.item(0, 0).text() == "h1"
+
+    panel.table.setCurrentCell(0, 0)
+    qtbot.mouseClick(panel.remove_button, QtCore.Qt.LeftButton)
+    panel.load_from_config(store.state.analysis.harminv)
+
+    assert store.state.analysis.harminv.monitors == []
+    assert panel.table.rowCount() == 0
+
+
+def test_harminv_monitor_edit_dialog_validates_and_saves(qtbot, monkeypatch) -> None:
+    store = ProjectStore()
+    dialog = HarminvMonitorEditDialog(
+        store,
+        HarminvMonitorConfig(component="Ez", point_x="1", point_y="2", fcen="0.3", df="0.05"),
+    )
+    qtbot.addWidget(dialog)
+
+    assert dialog.component.currentText() == "Ez"
+    assert dialog.point_x.text() == "1"
+    assert dialog.point_y.text() == "2"
+
+    dialog.component.setCurrentText("Hz")
+    dialog.point_x.setText("-1")
+    dialog.point_y.setText("4")
+    dialog.fcen.setText("0.4")
+    dialog.df.setText("0.2")
+    dialog._on_save()
+
+    assert dialog.result == HarminvMonitorConfig(
+        component="Hz",
+        point_x="-1",
+        point_y="4",
+        fcen="0.4",
+        df="0.2",
+    )
+
+    bad_dialog = HarminvMonitorEditDialog(store, HarminvMonitorConfig())
+    qtbot.addWidget(bad_dialog)
+    warning_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        QtWidgets.QMessageBox,
+        "warning",
+        lambda _parent, title, msg: warning_calls.append((title, msg)),
+    )
+    bad_dialog.point_x.setText("unknown_name")
+    bad_dialog._on_save()
+
+    assert bad_dialog.result is None
+    assert warning_calls
 
 
 def test_transmission_reuse_dropdown_lists_completed_runs_and_uses_output_labels(

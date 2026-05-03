@@ -8,6 +8,8 @@ from meep_gui.model import (
     FluxMonitorConfig,
     FrequencyDomainSolverConfig,
     GeometryItem,
+    HarminvConfig,
+    HarminvMonitorConfig,
     KPoint,
     Material,
     MeepKPointsConfig,
@@ -31,7 +33,12 @@ def test_harminv_script_writes_outputs_to_subfolder() -> None:
             symmetry_enabled=True,
             symmetries=[SymmetryItem(name="mx", kind="mirror", direction="x", phase="-1")],
         ),
-        analysis=AnalysisConfig(kind="harminv"),
+        analysis=AnalysisConfig(
+            kind="harminv",
+            harminv=HarminvConfig(
+                monitors=[HarminvMonitorConfig(point_x="0", point_y="0")],
+            ),
+        ),
     )
 
     code = generate_script(state)
@@ -49,9 +56,45 @@ def test_harminv_script_writes_outputs_to_subfolder() -> None:
     assert "run_domain_preview_out = os.path.join(out_dir, 'domain_preview.png')" in code
     assert "anim_out = os.path.join(out_dir, \"harminv_animation.mp4\")" in code
     assert "harminv_out = os.path.join(out_dir, \"harminv.txt\")" in code
-    assert "marker_expr=('0', '0')" in code
+    assert "marker_exprs=(('h1', '0', '0'),)" in code
     assert "with open(harminv_out, 'w', encoding='utf-8') as f:" in code
+    assert "f.write(f'========={label} MODES========\\n')" in code
     assert "k_point=" not in code
+
+
+def test_harminv_script_emits_multiple_monitor_sections() -> None:
+    state = ProjectState(
+        analysis=AnalysisConfig(
+            kind="harminv",
+            harminv=HarminvConfig(
+                animation_component="Hz",
+                monitors=[
+                    HarminvMonitorConfig(
+                        component="Ez",
+                        point_x="-1",
+                        point_y="0",
+                        fcen="0.2",
+                        df="0.1",
+                    ),
+                    HarminvMonitorConfig(
+                        component="Hz",
+                        point_x="1",
+                        point_y="0.5",
+                        fcen="0.3",
+                        df="0.2",
+                    ),
+                ],
+            ),
+        ),
+    )
+
+    code = generate_script(state)
+
+    assert "animate = mp.Animate2D(fields=mp.Hz, realtime=False)" in code
+    assert "harminv_monitors.append(('h1', mp.Harminv(mp.Ez, mp.Vector3(-1, 0), 0.2, 0.1)))" in code
+    assert "harminv_monitors.append(('h2', mp.Harminv(mp.Hz, mp.Vector3(1, 0.5), 0.3, 0.2)))" in code
+    assert "marker_exprs=(('h1', '-1', '0'), ('h2', '1', '0.5'))" in code
+    assert "f.write(f'========={label} MODES========\\n')" in code
 
 
 def test_field_animation_script_uses_out_dir_and_flux_exports() -> None:
@@ -523,7 +566,10 @@ def test_custom_source_script_can_inline_selected_temporal_source() -> None:
 def test_harminv_script_emits_flux_png_exports_when_monitors_exist() -> None:
     state = ProjectState(
         flux_monitors=[FluxMonitorConfig(name="tx")],
-        analysis=AnalysisConfig(kind="harminv"),
+        analysis=AnalysisConfig(
+            kind="harminv",
+            harminv=HarminvConfig(monitors=[HarminvMonitorConfig()]),
+        ),
     )
 
     code = generate_script(state)
@@ -1137,7 +1183,10 @@ def test_generate_script_rejects_non_literal_symmetry_phase() -> None:
             symmetry_enabled=True,
             symmetries=[SymmetryItem(name="mx", kind="mirror", direction="x", phase="a*1j")],
         ),
-        analysis=AnalysisConfig(kind="harminv"),
+        analysis=AnalysisConfig(
+            kind="harminv",
+            harminv=HarminvConfig(monitors=[HarminvMonitorConfig()]),
+        ),
     )
 
     try:
@@ -1150,7 +1199,10 @@ def test_generate_script_rejects_non_literal_symmetry_phase() -> None:
 
 def test_sweep_enabled_script_emits_runner_and_folder_layout() -> None:
     state = ProjectState(
-        analysis=AnalysisConfig(kind="harminv"),
+        analysis=AnalysisConfig(
+            kind="harminv",
+            harminv=HarminvConfig(monitors=[HarminvMonitorConfig()]),
+        ),
         parameters=[Parameter(name="a", expr="1"), Parameter(name="b", expr="10")],
         sweep=SweepConfig(
             enabled=True,

@@ -46,6 +46,7 @@ def emit_domain_preview_helpers(lines: list[str]) -> None:
         "    *,",
         "    title='Domain Preview',",
         "    marker_expr=None,",
+        "    marker_exprs=None,",
         "    rng=None,",
         "):",
         "    from matplotlib.backends.backend_agg import FigureCanvasAgg",
@@ -68,11 +69,18 @@ def emit_domain_preview_helpers(lines: list[str]) -> None:
         "                    linestyle='--',",
         "                )",
         "            )",
-        "        if marker_expr is not None:",
+        "        marker_items = []",
+        "        if marker_exprs is not None:",
+        "            marker_items.extend(marker_exprs)",
+        "        elif marker_expr is not None:",
+        "            marker_items.append(('', marker_expr[0], marker_expr[1]))",
+        "        for marker_label, marker_x_expr, marker_y_expr in marker_items:",
         "            try:",
-        "                hx = _eval_numeric(marker_expr[0], dict(parameter_values), rng=rng)",
-        "                hy = _eval_numeric(marker_expr[1], dict(parameter_values), rng=rng)",
+        "                hx = _eval_numeric(marker_x_expr, dict(parameter_values), rng=rng)",
+        "                hy = _eval_numeric(marker_y_expr, dict(parameter_values), rng=rng)",
         "                ax.plot(hx, hy, marker='x', color='#006400', markersize=7, markeredgewidth=1.6)",
+        "                if marker_label:",
+        "                    ax.text(hx, hy, marker_label, color='#006400', fontsize=8, ha='left', va='bottom')",
         "            except Exception:",
         "                pass",
         "        ax.set_title(title)",
@@ -106,6 +114,7 @@ def emit_domain_preview_call(
     domain,
     monitors,
     marker_expr: tuple[str, str] | None = None,
+    marker_exprs: tuple[tuple[str, str, str], ...] | None = None,
 ) -> None:
     line(lines, f"{prefix}_monitor_specs = [")
     for monitor in monitors:
@@ -128,6 +137,10 @@ def emit_domain_preview_call(
     marker_literal = (
         f"({marker_expr[0]!r}, {marker_expr[1]!r})" if marker_expr is not None else "None"
     )
+    if marker_exprs is None:
+        marker_exprs_literal = "None"
+    else:
+        marker_exprs_literal = repr(tuple(marker_exprs))
     for text in (
         f"{prefix}_domain_preview_out = os.path.join(out_dir, {output_name!r})",
         "_save_domain_preview_png(",
@@ -138,6 +151,7 @@ def emit_domain_preview_call(
         f"    {prefix}_symmetry_specs,",
         f"    title={title!r},",
         f"    marker_expr={marker_literal},",
+        f"    marker_exprs={marker_exprs_literal},",
         "    rng=_rng,",
         ")",
     ):

@@ -399,10 +399,11 @@ def _build_analysis_body(
     )
     if prepared.plan.backend == "meep_fdtd" and prepared.recipe.uses_fdtd_script_setup(prepared.plan):
         marker_expr = None
+        marker_exprs = None
         if state.analysis.kind == "harminv":
-            marker_expr = (
-                state.analysis.harminv.point_x,
-                state.analysis.harminv.point_y,
+            marker_exprs = tuple(
+                (f"h{idx}", monitor.point_x, monitor.point_y)
+                for idx, monitor in enumerate(state.analysis.harminv.monitors, start=1)
             )
         emit_domain_preview_call(
             body,
@@ -413,6 +414,7 @@ def _build_analysis_body(
             domain=scene.domain,
             monitors=scene.monitors,
             marker_expr=marker_expr,
+            marker_exprs=marker_exprs,
         )
     prepared.recipe.emit_script(state, prepared.plan, body)
 

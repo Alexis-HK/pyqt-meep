@@ -60,12 +60,19 @@ analysis:
     point_y: '-0.15'
     fcen: '0.65'
     df: '0.1'
+    animation_component: Hz
     until_after_sources: '200'
     animation_interval: '1'
     animation_fps: '20'
     output_dir: ''
     output_name: harminv_animation.mp4
     harminv_log_path: harminv.txt
+    monitors:
+    - component: Hz
+      point_x: '-4.9'
+      point_y: '-0.15'
+      fcen: '0.65'
+      df: '0.1'
   transmission_spectrum:
     incident_monitor: ''
     transmission_monitor: ''
