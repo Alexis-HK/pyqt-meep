@@ -1,0 +1,355 @@
+Restricted Geometry Scripting Mini-Language
+===========================================
+
+This mini-language lets you describe 2D geometry with small, Python-like snippets.
+It is meant for photonics geometry: waveguides, holes, patterned regions, gratings,
+and other shapes that should become normal Meep/MPB geometry.
+
+It is intentionally not full Python. Snippets are parsed safely, and only a small
+set of geometry and math operations is available.
+
+
+The Basic Idea
+--------------
+
+A script builds one or more geometry objects, then sends them to the project with
+emit(...).
+
+Example:
+
+slab = rect(center=(0, 0), size=(10, 0.5))
+emit(slab, material=materials["silicon"], height=params["thickness"])
+
+Parameters are read with:
+
+    params["name"]
+
+Materials are read with:
+
+    materials["name"]
+
+Parameters and materials are read-only. You can use them, but scripts cannot
+change them.
+
+
+Available Geometry Constructors
+-------------------------------
+
+    rect(center=(x, y), size=(w, h))
+    circle(center=(x, y), radius=r, segments=32)
+    ellipse(center=(x, y), radius=(rx, ry), segments=32)
+    polygon(points=[(x1, y1), (x2, y2), ...])
+    path(points=[...], width=w, cap="round", join="round", segments=8)
+
+
+Implicit Regions
+----------------
+
+Use region(...) when the shape is easiest to describe as a math inequality.
+
+g = region(
+    "x*x + y*y < r*r",
+    bounds=(-2, -2, 2, 2),
+    resolution=300
+)
+
+emit(g, material=materials["silicon"], height=params["thickness"])
+
+The expression is tested on a grid inside the bounds. Cells where the expression
+is true become geometry. Higher resolution is smoother but slower.
+
+Allowed expression names include:
+
+    x, y, pi
+    sin, cos, tan, sqrt, abs, exp, log, min, max, uniform, gauss
+    params["name"]
+    numeric local variables
+
+The expression must return True or False at each sample point.
+
+
+Boolean Operations
+------------------
+
+    union(a, b, ...)
+    difference(a, b, ...)
+    intersection(a, b, ...)
+
+Example:
+
+outer = circle(center=(0, 0), radius=1.0)
+inner = circle(center=(0, 0), radius=0.5)
+ring = difference(outer, inner)
+
+
+Transforms And Cleanup
+----------------------
+
+    move(g, dx=0, dy=0)
+    rotate(g, angle=90, origin=(0, 0), degrees=True)
+    scale(g, sx=1, sy=1, origin=(0, 0))
+    mirror_x(g, x=0)
+    mirror_y(g, y=0)
+    clean(g)
+    simplify(g, tolerance)
+
+
+Helpers
+-------
+
+    linspace(start, stop, count)
+    reverse(points)
+    range(...)
+    sin, cos, tan, sqrt, abs, exp, log, min, max, pi
+
+Lists and loops are supported in a limited way:
+
+pts = []
+
+for i in range(100):
+    x = -5 + i * 10 / 99
+    y = 0.2 * sin(2 * pi * x)
+    pts.append((x, y))
+
+
+Important Limits
+----------------
+
+The language has limits to keep the app from slowing down too much:
+
+    Maximum loop iterations: 10000
+    Maximum loop nesting: 3
+    Maximum implicit grid dimension: 512
+    Maximum implicit grid cells: 100000
+    Maximum generated polygon components: 2000
+    Maximum vertices per polygon: 4096
+    Maximum total vertices: 50000
+    Maximum list length: 10000
+    Maximum coordinate magnitude: 1e6
+
+
+What Is Not Allowed
+-------------------
+
+These are intentionally rejected:
+
+    import
+    open, eval, exec, compile
+    function or class definitions
+    lambda
+    while loops
+    try/except
+    with
+    global and nonlocal
+    arbitrary attributes or method calls
+    file system, network, environment, subprocess, globals, locals, or builtins
+
+The only method-style call currently allowed is:
+
+some_local_list.append(value)
+
+
+Example 1: Region Bounded By Several Curves
+-------------------------------------------
+
+This shape is defined by multiple inequalities at once. The final silicon region
+is inside a circle, above a sinusoidal lower boundary, and below a line boundary.
+
+Useful parameters:
+
+    r = 2.0
+    amp = 0.25
+    period = 1.4
+    slope = 0.18
+    thickness = 0.22
+
+Snippet:
+
+r = params["r"]
+amp = params["amp"]
+period = params["period"]
+slope = params["slope"]
+
+g = region(
+    "(x*x + y*y - r*r < 0) and "
+    "(y - amp*sin(2*pi*x/period) > 0) and "
+    "(y + slope*x - 1.1 < 0)",
+    bounds=(-2.5, -1.5, 2.5, 1.8),
+    resolution=(420, 280)
+)
+
+emit(g, material=materials["silicon"], height=params["thickness"])
+
+
+Example 2: Hexagonal Photonic Crystal With Loops
+------------------------------------------------
+
+This creates a hexagonal lattice of air holes in a silicon slab. The
+loop places holes on staggered rows. The slab is silicon, and the holes are
+emitted as higher-priority air polygons so they override the slab.
+
+Useful parameters:
+
+    pitch = 0.45
+    hole_radius = 0.13
+    rows = 9
+    cols = 11
+    wg_width = 5.0
+    slab_length = 6.0
+    thickness = 0.22
+
+Snippet:
+
+pitch = params["pitch"]
+r = params["hole_radius"]
+rows = params["rows"]
+cols = params["cols"]
+
+holes = []
+row_step = pitch * sqrt(3) / 2
+
+for j in range(rows):
+    y = (j - (rows - 1) / 2) * row_step
+    x_offset = 0
+    if j % 2 == 1:
+        x_offset = pitch / 2
+
+    for i in range(cols):
+        x = (i - (cols - 1) / 2) * pitch + x_offset
+        holes.append(circle(center=(x, y), radius=r, segments=32))
+
+slab = rect(center=(0, 0), size=(params["slab_length"], params["wg_width"]))
+all_holes = union(*holes)
+
+emit(slab, material=materials["silicon"], height=params["thickness"])
+emit(all_holes, material=materials["air"], height=params["thickness"], priority=10)
+
+
+Example 3: Linear Array Of Tapered Circles
+------------------------------------------
+
+This creates a row of circular holes whose radius tapers smoothly from small at
+the edges to larger near the center. This is useful for tapered cavities.
+
+Useful parameters:
+
+    pitch = 0.45
+    periods = 17
+    radius_min = 0.08
+    radius_max = 0.16
+    slab_length = 8.5
+    wg_width = 0.55
+    thickness = 0.22
+
+Snippet:
+
+pitch = params["pitch"]
+n = params["periods"]
+r_min = params["radius_min"]
+r_max = params["radius_max"]
+
+holes = []
+
+for i in range(n):
+    t = abs(i - (n - 1) / 2) / ((n - 1) / 2)
+    radius = r_max - (r_max - r_min) * t
+    x = (i - (n - 1) / 2) * pitch
+    holes.append(circle(center=(x, 0), radius=radius, segments=32))
+
+slab = rect(center=(0, 0), size=(params["slab_length"], params["wg_width"]))
+
+emit(slab, material=materials["silicon"], height=params["thickness"])
+emit(union(*holes), material=materials["air"], height=params["thickness"], priority=10)
+
+
+Example 4: Top-Down Grating Coupler
+-----------------------------------
+
+This is a simplified top-down fan grating coupler. It makes a straight input
+waveguide, a tapered fan aperture, and several concentric etched grating arcs.
+The arcs are emitted as air with higher priority.
+
+Useful parameters:
+
+    wg_width = 0.5
+    grating_start = 0.7
+    grating_length = 4.0
+    grating_width = 4.0
+    period = 0.36
+    duty = 0.45
+    periods = 9
+    input_length = 4.0
+    arc_extension = 0.15
+    segments = 96
+    thickness = 0.22
+
+Snippet:
+
+wg = params["wg_width"]
+grating_start = params["grating_start"]
+grating_len = params["grating_length"]
+grating_width = params["grating_width"]
+period = params["period"]
+duty = params["duty"]
+n = params["periods"]
+input_len = params["input_length"]
+arc_extension = params["arc_extension"]
+segments = params["segments"]
+fan_len = grating_start + grating_len
+
+input_wg = rect(
+    center=(-input_len / 2, 0),
+    size=(input_len, wg)
+)
+
+fan = polygon(points=[
+    (0, -wg / 2),
+    (fan_len, -grating_width / 2),
+    (fan_len, grating_width / 2),
+    (0, wg / 2)
+])
+
+silicon = union(input_wg, fan)
+
+slot_fan = polygon(points=[
+    (0, -wg / 2 - arc_extension),
+    (fan_len, -grating_width / 2 - arc_extension),
+    (fan_len, grating_width / 2 + arc_extension),
+    (0, wg / 2 + arc_extension)
+])
+
+slots = []
+
+for i in range(n):
+    r0 = grating_start + i * period
+    slot_width = period * duty
+
+    outer = circle(center=(0, 0), radius=r0 + slot_width, segments=segments)
+    inner = circle(center=(0, 0), radius=r0, segments=segments)
+    annulus = difference(outer, inner)
+    slots.append(intersection(annulus, slot_fan))
+
+emit(silicon, material=materials["silicon"], height=params["thickness"])
+emit(union(*slots), material=materials["air"], height=params["thickness"], priority=10)
+
+
+Tips
+----
+
+Start with small resolutions and small loop counts. Validate the script, inspect
+the generated polygon and vertex count, then increase detail once the shape is
+correct.
+
+For implicit regions, make bounds as tight as possible. A 300 x 300 region over
+a small box is much more useful than a 300 x 300 region over a huge box.
+
+For circular or curved objects, 32 segments is usually a good first value. Use
+more only when the geometry visibly needs it.
+
+Use priority when one emitted shape should override another. Usually this goes like: 
+
+emit(slab, material=materials["silicon"])
+emit(holes, material=materials["air"], priority=10)
+
+Lower priority geometry is placed first. Higher priority geometry is placed
+later.
