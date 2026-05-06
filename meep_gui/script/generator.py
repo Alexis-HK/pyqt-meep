@@ -18,6 +18,7 @@ from .simulation import (
     emit_sources,
     emit_symmetries,
     scene_uses_scripted_geometry,
+    scene_uses_scripted_region,
     simulation_cylindrical_kwargs,
     simulation_k_point_expr,
 )
@@ -31,6 +32,9 @@ def _emit_header(lines: list[str], plan: ScriptPlan) -> None:
     line(lines, "import random")
     if _plan_uses_scripted_geometry(plan):
         line(lines, "import math")
+    if _plan_uses_scripted_region(plan):
+        line(lines, "import contourpy as _scripted_contourpy")
+        line(lines, "import numpy as _scripted_np")
     if _plan_uses_cmath(plan):
         line(lines, "import cmath")
     line(lines, "import meep as mp")
@@ -69,6 +73,10 @@ def _plan_uses_cmath(plan: ScriptPlan) -> bool:
 
 def _plan_uses_scripted_geometry(plan: ScriptPlan) -> bool:
     return any(scene_uses_scripted_geometry(scene) for scene in _iter_plan_scenes(plan))
+
+
+def _plan_uses_scripted_region(plan: ScriptPlan) -> bool:
+    return any(scene_uses_scripted_region(scene) for scene in _iter_plan_scenes(plan))
 
 
 def _primary_scene(plan: ScriptPlan):

@@ -219,6 +219,7 @@ def test_field_animation_script_emits_ring_geometry() -> None:
 
 def test_scripted_geometry_script_preserves_source_and_parameterization() -> None:
     pytest.importorskip("shapely")
+    pytest.importorskip("contourpy")
     state = ProjectState(
         parameters=[Parameter(name="r", expr="0.5")],
         materials=[Material(name="si", index_expr="3")],
@@ -241,6 +242,8 @@ def test_scripted_geometry_script_preserves_source_and_parameterization() -> Non
     code = generate_script(state)
 
     assert "import math" in code
+    assert "import contourpy as _scripted_contourpy" in code
+    assert "import numpy as _scripted_np" in code
     assert "from shapely.geometry import Polygon as _ShapelyPolygon" in code
     assert "def _build_geometry_scripted_1(" in code
     assert 'g = region("x*x + y*y < r*r", bounds=(-1, -1, 1, 1), resolution=24)' in code
@@ -258,6 +261,7 @@ def test_scripted_geometry_helpers_are_omitted_when_unused() -> None:
 
 def test_scripted_geometry_sweep_export_rebuilds_after_overrides() -> None:
     pytest.importorskip("shapely")
+    pytest.importorskip("contourpy")
     state = ProjectState(
         parameters=[Parameter(name="w", expr="1")],
         materials=[Material(name="si", index_expr="3")],
@@ -284,6 +288,8 @@ def test_scripted_geometry_sweep_export_rebuilds_after_overrides() -> None:
     code = generate_script(state)
 
     assert "parameter_values = _build_parameter_values(overrides, rng=_rng)" in code
+    assert "import contourpy as _scripted_contourpy" not in code
+    assert "import numpy as _scripted_np" not in code
     assert 'g = rect(center=(0, 0), size=(params["w"], 1))' in code
     assert "def _build_geometry_scripted_1(target=geometry, parameter_values=parameter_values" in code
     assert "run_analysis(run_dir, overrides={name: value})" in code

@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 pytest.importorskip("shapely")
+pytest.importorskip("contourpy")
 
 from meep_gui.analysis.mpb_support import build_mpb_geometry
 from meep_gui.geometry_script import (

@@ -68,7 +68,15 @@ class _ShapelyAPI:
     scale: Any
 
 
+@dataclass
+class _ContourAPI:
+    contour_generator: Any
+    FillType: Any
+    np: Any
+
+
 _SHAPELY: _ShapelyAPI | None = None
+_CONTOUR: _ContourAPI | None = None
 
 
 class GeometryScriptError(ValueError):
@@ -134,6 +142,26 @@ def _require_shapely() -> _ShapelyAPI:
         scale=scale,
     )
     return _SHAPELY
+
+
+def _require_contour() -> _ContourAPI:
+    global _CONTOUR
+    if _CONTOUR is not None:
+        return _CONTOUR
+    try:
+        import numpy as np
+        from contourpy import FillType, contour_generator
+    except ModuleNotFoundError as exc:
+        raise GeometryScriptError(
+            "ContourPy and NumPy are required for implicit region geometry. "
+            "Install contourpy and numpy."
+        ) from exc
+    _CONTOUR = _ContourAPI(
+        contour_generator=contour_generator,
+        FillType=FillType,
+        np=np,
+    )
+    return _CONTOUR
 
 
 def run_geometry_script(
@@ -534,6 +562,307 @@ class _Interpreter:
         except Exception as exc:
             raise GeometryScriptError(str(exc), expr) from exc
 
+    def _eval_region_array(
+        self,
+        expr: ast.AST,
+        *,
+        extra_env: dict[str, Any],
+        shape: tuple[int, int],
+    ) -> Any:
+        self._tick(expr)
+        contour = _require_contour()
+        np = contour.np
+        if isinstance(expr, ast.Constant):
+            value = expr.value
+            if isinstance(value, (int, float, str, bool)) or value is None:
+                return value
+            raise GeometryScriptError("Unsupported constant.", expr)
+        if isinstance(expr, ast.Name):
+            name = expr.id
+            self._validate_name_reference(name, expr)
+            if name in extra_env:
+                return extra_env[name]
+            if name == "pi":
+                return math.pi
+            if name in self.parameter_values:
+                self.referenced_parameters.add(name)
+                return self.parameter_values[name]
+            if name in self.env:
+                return self._number(self.env[name], expr)
+            raise GeometryScriptError(f"Unknown name: {name}", expr)
+        if isinstance(expr, ast.List):
+            values = [
+                self._eval_region_array(item, extra_env=extra_env, shape=shape)
+                for item in expr.elts
+            ]
+            self._check_list_length(values, expr)
+            return values
+        if isinstance(expr, ast.Tuple):
+            values = tuple(
+                self._eval_region_array(item, extra_env=extra_env, shape=shape)
+                for item in expr.elts
+            )
+            self._check_list_length(values, expr)
+            return values
+        if isinstance(expr, ast.Subscript):
+            return self._eval_region_subscript(expr)
+        if isinstance(expr, ast.UnaryOp):
+            value = self._eval_region_array(expr.operand, extra_env=extra_env, shape=shape)
+            if isinstance(expr.op, ast.UAdd):
+                return +self._region_numeric(value, expr)
+            if isinstance(expr.op, ast.USub):
+                return -self._region_numeric(value, expr)
+            if isinstance(expr.op, ast.Not):
+                return np.logical_not(self._region_bool(value, expr))
+            raise GeometryScriptError("Unsupported unary operator.", expr)
+        if isinstance(expr, ast.BinOp):
+            return self._eval_region_array_binop(expr, extra_env=extra_env, shape=shape)
+        if isinstance(expr, ast.BoolOp):
+            values = [
+                self._region_bool(
+                    self._eval_region_array(item, extra_env=extra_env, shape=shape),
+                    item,
+                )
+                for item in expr.values
+            ]
+            if isinstance(expr.op, ast.And):
+                result = values[0]
+                for value in values[1:]:
+                    result = np.logical_and(result, value)
+                return result
+            if isinstance(expr.op, ast.Or):
+                result = values[0]
+                for value in values[1:]:
+                    result = np.logical_or(result, value)
+                return result
+            raise GeometryScriptError("Unsupported boolean operator.", expr)
+        if isinstance(expr, ast.Compare):
+            return self._eval_region_array_compare(expr, extra_env=extra_env, shape=shape)
+        if isinstance(expr, ast.Call):
+            return self._eval_region_array_call(expr, extra_env=extra_env, shape=shape)
+        if isinstance(expr, ast.Attribute):
+            raise GeometryScriptError("Attribute access is not allowed.", expr)
+        if isinstance(expr, ast.Lambda):
+            raise GeometryScriptError("Lambda expressions are not allowed.", expr)
+        raise GeometryScriptError(f"Unsupported expression: {type(expr).__name__}", expr)
+
+    def _eval_region_subscript(self, expr: ast.Subscript) -> Any:
+        if not isinstance(expr.value, ast.Name):
+            raise GeometryScriptError("Only params[...] and materials[...] subscriptions are allowed.", expr)
+        target_name = expr.value.id
+        if target_name not in {"params", "materials"}:
+            raise GeometryScriptError("Only params[...] and materials[...] subscriptions are allowed.", expr)
+        if target_name == "materials":
+            raise GeometryScriptError("materials[...] is not allowed in region expressions.", expr)
+        key = self._eval_expr(expr.slice, region=True)
+        if not isinstance(key, str):
+            raise GeometryScriptError("params/materials keys must be strings.", expr)
+        try:
+            return self.env[target_name][key]
+        except KeyError as exc:
+            raise GeometryScriptError(f"Unknown parameter: {key}", expr) from exc
+
+    def _eval_region_array_binop(
+        self,
+        expr: ast.BinOp,
+        *,
+        extra_env: dict[str, Any],
+        shape: tuple[int, int],
+    ) -> Any:
+        left = self._region_numeric(
+            self._eval_region_array(expr.left, extra_env=extra_env, shape=shape),
+            expr,
+        )
+        right = self._region_numeric(
+            self._eval_region_array(expr.right, extra_env=extra_env, shape=shape),
+            expr,
+        )
+        if isinstance(expr.op, ast.Add):
+            return left + right
+        if isinstance(expr.op, ast.Sub):
+            return left - right
+        if isinstance(expr.op, ast.Mult):
+            return left * right
+        if isinstance(expr.op, ast.Div):
+            return left / right
+        if isinstance(expr.op, ast.Pow):
+            return left**right
+        if isinstance(expr.op, ast.Mod):
+            return left % right
+        raise GeometryScriptError("Unsupported arithmetic operator.", expr)
+
+    def _eval_region_array_compare(
+        self,
+        expr: ast.Compare,
+        *,
+        extra_env: dict[str, Any],
+        shape: tuple[int, int],
+    ) -> Any:
+        contour = _require_contour()
+        np = contour.np
+        left = self._eval_region_array(expr.left, extra_env=extra_env, shape=shape)
+        result = True
+        for op, comparator in zip(expr.ops, expr.comparators):
+            right = self._eval_region_array(comparator, extra_env=extra_env, shape=shape)
+            if isinstance(op, ast.Lt):
+                current = left < right
+            elif isinstance(op, ast.LtE):
+                current = left <= right
+            elif isinstance(op, ast.Gt):
+                current = left > right
+            elif isinstance(op, ast.GtE):
+                current = left >= right
+            elif isinstance(op, ast.Eq):
+                current = left == right
+            elif isinstance(op, ast.NotEq):
+                current = left != right
+            else:
+                raise GeometryScriptError("Unsupported comparison operator.", expr)
+            result = np.logical_and(result, current)
+            left = right
+        return result
+
+    def _eval_region_array_call(
+        self,
+        expr: ast.Call,
+        *,
+        extra_env: dict[str, Any],
+        shape: tuple[int, int],
+    ) -> Any:
+        if not isinstance(expr.func, ast.Name):
+            raise GeometryScriptError("Only math function calls are allowed in region expressions.", expr)
+        name = expr.func.id
+        if name not in {"sin", "cos", "tan", "sqrt", "abs", "exp", "log", "min", "max", "uniform", "gauss"}:
+            raise GeometryScriptError(f"Unknown region function: {name}", expr)
+        args = [
+            self._eval_region_array(arg, extra_env=extra_env, shape=shape)
+            for arg in expr.args
+        ]
+        if any(keyword.arg is None for keyword in expr.keywords):
+            raise GeometryScriptError("Keyword expansion is not allowed.", expr)
+        kwargs = {
+            keyword.arg: self._eval_region_array(keyword.value, extra_env=extra_env, shape=shape)
+            for keyword in expr.keywords
+        }
+        try:
+            return self._call_region_array_function(name, args, kwargs, shape)
+        except GeometryScriptError:
+            raise
+        except Exception as exc:
+            raise GeometryScriptError(str(exc), expr) from exc
+
+    def _call_region_array_function(
+        self,
+        name: str,
+        args: list[Any],
+        kwargs: dict[str, Any],
+        shape: tuple[int, int],
+    ) -> Any:
+        contour = _require_contour()
+        np = contour.np
+        if kwargs:
+            raise GeometryScriptError("Keyword arguments are not supported for region functions.")
+        unary = {
+            "sin": np.sin,
+            "cos": np.cos,
+            "tan": np.tan,
+            "sqrt": np.sqrt,
+            "abs": np.abs,
+            "exp": np.exp,
+            "log": np.log,
+        }
+        if name in unary:
+            if len(args) != 1:
+                raise GeometryScriptError(f"{name} expects one argument.")
+            return unary[name](self._region_numeric(args[0]))
+        if name in {"min", "max"}:
+            if not args:
+                raise GeometryScriptError(f"{name} expects at least one argument.")
+            values = args
+            if len(values) == 1 and isinstance(values[0], (list, tuple)):
+                values = list(values[0])
+            if not values:
+                raise GeometryScriptError(f"{name} expects at least one argument.")
+            reducer = np.minimum if name == "min" else np.maximum
+            result = self._region_numeric(values[0])
+            for value in values[1:]:
+                result = reducer(result, self._region_numeric(value))
+            return result
+        if name == "uniform":
+            if len(args) != 2:
+                raise GeometryScriptError("uniform expects two arguments.")
+            return self._region_random_array(args[0], args[1], shape, gaussian=False)
+        if name == "gauss":
+            if len(args) != 2:
+                raise GeometryScriptError("gauss expects two arguments.")
+            return self._region_random_array(args[0], args[1], shape, gaussian=True)
+        raise GeometryScriptError(f"Unknown region function: {name}")
+
+    def _region_numeric(self, value: Any, node: ast.AST | None = None) -> Any:
+        contour = _require_contour()
+        np = contour.np
+        if isinstance(value, bool):
+            raise GeometryScriptError("Expected a number.", node)
+        if isinstance(value, np.ndarray):
+            if value.dtype == np.bool_ or not np.issubdtype(value.dtype, np.number):
+                raise GeometryScriptError("Expected a number.", node)
+            if not np.all(np.isfinite(value)):
+                raise GeometryScriptError("Expected a finite number.", node)
+            return value
+        if not isinstance(value, (int, float)):
+            raise GeometryScriptError("Expected a number.", node)
+        numeric = float(value)
+        if not math.isfinite(numeric):
+            raise GeometryScriptError("Expected a finite number.", node)
+        return numeric
+
+    def _region_bool(self, value: Any, node: ast.AST | None = None) -> Any:
+        contour = _require_contour()
+        np = contour.np
+        if isinstance(value, (bool, np.bool_)):
+            return value
+        if isinstance(value, np.ndarray) and value.dtype == np.bool_:
+            return value
+        raise GeometryScriptError("region expression must evaluate to a boolean.", node)
+
+    def _region_bool_mask(
+        self,
+        value: Any,
+        shape: tuple[int, int],
+        node: ast.AST | None = None,
+    ) -> Any:
+        contour = _require_contour()
+        np = contour.np
+        value = self._region_bool(value, node)
+        if isinstance(value, (bool, np.bool_)):
+            return np.full(shape, bool(value), dtype=bool)
+        try:
+            return np.broadcast_to(value, shape).astype(bool, copy=False)
+        except ValueError as exc:
+            raise GeometryScriptError("region expression shape does not match the sampling grid.", node) from exc
+
+    def _region_random_array(
+        self,
+        first: Any,
+        second: Any,
+        shape: tuple[int, int],
+        *,
+        gaussian: bool,
+    ) -> Any:
+        contour = _require_contour()
+        np = contour.np
+        first_arr, second_arr = np.broadcast_arrays(
+            self._region_numeric(first),
+            self._region_numeric(second),
+            np.empty(shape),
+        )[:2]
+        values = np.empty(shape, dtype=float)
+        for index in np.ndindex(shape):
+            a = float(first_arr[index])
+            b = float(second_arr[index])
+            values[index] = self.rng.gauss(a, b) if gaussian else self.rng.uniform(a, b)
+        return values
+
     def _eval_call_args(self, expr: ast.Call) -> list[Any]:
         args: list[Any] = []
         for arg in expr.args:
@@ -783,6 +1112,8 @@ class _Interpreter:
     def _func_region(self, expr, *, bounds, resolution=256) -> _GeometryValue:
         if not isinstance(expr, str):
             raise GeometryScriptError("region expr must be a string.")
+        contour = _require_contour()
+        np = contour.np
         bounds_tuple = self._bounds(bounds)
         nx, ny = self._resolution(resolution)
         try:
@@ -792,36 +1123,102 @@ class _Interpreter:
         xmin, ymin, xmax, ymax = bounds_tuple
         dx = (xmax - xmin) / nx
         dy = (ymax - ymin) / ny
-        rects = []
-        for j in range(ny):
-            run_start: int | None = None
-            y_center = ymin + (j + 0.5) * dy
-            for i in range(nx):
-                self._tick()
-                x_center = xmin + (i + 0.5) * dx
-                value = self._eval_expr(
-                    tree.body,
-                    extra_env={"x": x_center, "y": y_center},
-                    region=True,
-                )
-                if not isinstance(value, bool):
-                    raise GeometryScriptError("region expression must evaluate to a boolean.")
-                if value and run_start is None:
-                    run_start = i
-                if (not value or i == nx - 1) and run_start is not None:
-                    end = i + 1 if value and i == nx - 1 else i
-                    rects.append(
-                        self.shapely.box(
-                            xmin + run_start * dx,
-                            ymin + j * dy,
-                            xmin + end * dx,
-                            ymin + (j + 1) * dy,
-                        )
-                    )
-                    run_start = None
-        if not rects:
+        self.operation_count += nx * ny
+        if self.operation_count > MAX_OPERATIONS:
+            raise GeometryScriptError("Operation limit exceeded.")
+        x_centers = xmin + (np.arange(nx, dtype=float) + 0.5) * dx
+        y_centers = ymin + (np.arange(ny, dtype=float) + 0.5) * dy
+        grid_x, grid_y = np.meshgrid(x_centers, y_centers)
+        mask = self._region_bool_mask(
+            self._eval_region_array(
+                tree.body,
+                extra_env={"x": grid_x, "y": grid_y},
+                shape=(ny, nx),
+            ),
+            (ny, nx),
+            tree.body,
+        )
+        if not np.any(mask):
             return self._wrap_geom(self.shapely.GeometryCollection())
-        return self._wrap_geom(self.shapely.unary_union(rects))
+        padded = np.pad(mask.astype(float), 1, mode="constant", constant_values=0.0)
+        x_padded = xmin + (np.arange(nx + 2, dtype=float) - 0.5) * dx
+        y_padded = ymin + (np.arange(ny + 2, dtype=float) - 0.5) * dy
+        generator = contour.contour_generator(
+            x=x_padded,
+            y=y_padded,
+            z=padded,
+            name="serial",
+            fill_type=contour.FillType.OuterCode,
+        )
+        polygons = self._filled_contours_to_polygons(generator.filled(0.5, 1.5))
+        if not polygons:
+            return self._wrap_geom(self.shapely.GeometryCollection())
+        if len(polygons) == 1:
+            return self._wrap_geom(polygons[0])
+        return self._wrap_geom(self.shapely.GeometryCollection(polygons))
+
+    def _filled_contours_to_polygons(self, filled) -> list[Any]:
+        points_list, codes_list = filled
+        polygons = []
+        for points, codes in zip(points_list, codes_list):
+            rings = self._split_contour_rings(points, codes)
+            if not rings:
+                continue
+            exterior = rings[0]
+            holes = rings[1:]
+            polygon = self.shapely.Polygon(exterior, holes)
+            if polygon.is_empty:
+                continue
+            polygons.append(polygon)
+        return polygons
+
+    def _split_contour_rings(self, points, codes) -> list[list[tuple[float, float]]]:
+        rings: list[list[tuple[float, float]]] = []
+        current: list[tuple[float, float]] = []
+        for point, code in zip(points, codes):
+            code_value = int(code)
+            if code_value == 1:
+                if current:
+                    rings.append(self._clean_contour_ring(current))
+                current = []
+                x, y = float(point[0]), float(point[1])
+                current.append((x, y))
+                continue
+            if code_value == 2:
+                x, y = float(point[0]), float(point[1])
+                current.append((x, y))
+                continue
+            if code_value == 79:
+                if current:
+                    rings.append(self._clean_contour_ring(current))
+                    current = []
+                continue
+            raise GeometryScriptError("Unsupported contour path code.")
+        if current:
+            rings.append(self._clean_contour_ring(current))
+        return [ring for ring in rings if len(ring) >= 3 and abs(self._signed_ring_area(ring)) > 1e-18]
+
+    def _clean_contour_ring(self, ring: list[tuple[float, float]]) -> list[tuple[float, float]]:
+        cleaned = []
+        for x, y in ring:
+            if cleaned and abs(cleaned[-1][0] - x) <= 1e-14 and abs(cleaned[-1][1] - y) <= 1e-14:
+                continue
+            self._check_coordinate(x)
+            self._check_coordinate(y)
+            cleaned.append((x, y))
+        if len(cleaned) > 1:
+            first = cleaned[0]
+            last = cleaned[-1]
+            if abs(first[0] - last[0]) <= 1e-14 and abs(first[1] - last[1]) <= 1e-14:
+                cleaned.pop()
+        return cleaned
+
+    def _signed_ring_area(self, ring: list[tuple[float, float]]) -> float:
+        area = 0.0
+        for idx, (x1, y1) in enumerate(ring):
+            x2, y2 = ring[(idx + 1) % len(ring)]
+            area += x1 * y2 - x2 * y1
+        return area / 2.0
 
     def _bounds(self, value) -> tuple[float, float, float, float]:
         if not isinstance(value, (list, tuple)) or len(value) != 4:

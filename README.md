@@ -25,7 +25,7 @@ conda install --override-channels -c conda-forge \
 Then, in the folder, to run the application:
 
 ```
-python3 app.py
+python app.py
 ```
 In the future, MacOS and Linux executables could be created.
 # Roadmap
